@@ -1234,10 +1234,13 @@ function applyRotation() {
 }
 function refreshZoomLimit() {
   const mobile = window.matchMedia("(max-width: 980px)").matches;
-  const max = mobile ? 1.16 : 1.45;
+  const min = mobile ? 0.78 : 0.65;
+  const max = mobile ? 1.00 : 1.45;
+  zoomRange.min = String(min);
   zoomRange.max = String(max);
-  if (rotation.zoom > max) {
-    rotation.zoom = max;
+  const nextZoom = clamp(rotation.zoom, min, max);
+  if (rotation.zoom !== nextZoom) {
+    rotation.zoom = nextZoom;
     syncControls();
   }
 }

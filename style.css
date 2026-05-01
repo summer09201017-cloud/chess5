@@ -384,6 +384,7 @@ body[data-theme="sakura"] .scene {
   aspect-ratio: 1 / 1;
   position: relative;
   transform-style: preserve-3d;
+  --board-thickness: clamp(22px, 3.8vmin, 36px);
   cursor: grab;
   will-change: transform;
   transition: transform 0.18s linear;
@@ -392,22 +393,57 @@ body[data-theme="sakura"] .scene {
 
 .board-base {
   position: absolute;
-  inset: 0;
-  border-radius: 14px;
+  inset: 1.4%;
+  border-radius: 22px;
   background: var(--board-base);
-  box-shadow: 0 36px 60px rgba(0, 0, 0, 0.38), 0 10px 18px rgba(0, 0, 0, 0.32);
+  transform: translateZ(calc(var(--board-thickness) * -0.42));
+  transform-style: preserve-3d;
+  box-shadow:
+    0 30px 0 rgba(47, 27, 9, 0.62),
+    0 48px 70px rgba(0, 0, 0, 0.42),
+    0 12px 20px rgba(0, 0, 0, 0.3);
+}
+.board-base::before,
+.board-base::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(0,0,0,0.42)), var(--board-base);
+}
+.board-base::before {
+  left: 4%;
+  right: 4%;
+  bottom: calc(var(--board-thickness) * -0.84);
+  height: var(--board-thickness);
+  border-radius: 0 0 18px 18px;
+  transform-origin: top center;
+  transform: rotateX(-72deg);
+}
+.board-base::after {
+  top: 4%;
+  bottom: 4%;
+  right: calc(var(--board-thickness) * -0.84);
+  width: var(--board-thickness);
+  border-radius: 0 18px 18px 0;
+  transform-origin: left center;
+  transform: rotateY(72deg);
 }
 
 .board-surface {
   position: absolute;
-  inset: 0;
-  border-radius: 12px;
+  inset: 3.2%;
+  border-radius: 16px;
   overflow: hidden;
-  transform: translateZ(14px);
+  transform: translateZ(var(--board-thickness));
   transform-style: preserve-3d;
   background:
     repeating-linear-gradient(90deg, rgba(255, 241, 208, 0.08), rgba(255, 241, 208, 0.08) 2px, rgba(0, 0, 0, 0.02) 4px, rgba(0, 0, 0, 0.02) 7px),
     var(--board-surface);
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,0.18),
+    inset 0 -6px 16px rgba(72, 39, 14, 0.2),
+    0 14px 0 rgba(78, 45, 17, 0.28),
+    0 22px 34px rgba(0, 0, 0, 0.24);
 }
 
 body[data-theme="cyber"] .board-surface {
@@ -452,12 +488,13 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 
 .intersection {
   position: absolute;
-  transform: translate(-50%, -50%) translateZ(6px);
+  transform: translate(-50%, -50%) translateZ(18px);
   border: 0;
   padding: 0;
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
+  isolation: isolate;
 }
 
 .intersection::before {
@@ -488,24 +525,31 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 /* ===== Stones ===== */
 .stone {
   position: absolute;
-  inset: 7%;
+  inset: 8%;
   border-radius: 50%;
   pointer-events: none;
-  transform: translateZ(10px);
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45));
+  transform: translateZ(24px);
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 9px 5px rgba(0, 0, 0, 0.34));
   animation: drop 0.22s cubic-bezier(0.34, 1.7, 0.64, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   font-size: 110%;
   color: #fff;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  box-shadow:
+    inset 5px 5px 9px rgba(255, 255, 255, 0.2),
+    inset -8px -10px 12px rgba(0, 0, 0, 0.42),
+    0 3px 0 rgba(0, 0, 0, 0.32),
+    0 11px 13px rgba(0, 0, 0, 0.34);
 }
 @keyframes drop {
-  0% { transform: translateZ(60px) scale(1.4); opacity: 0; }
-  60% { transform: translateZ(20px) scale(0.95); opacity: 1; }
-  100% { transform: translateZ(10px) scale(1); opacity: 1; }
+  0% { transform: translateZ(82px) scale(1.32); opacity: 0; }
+  60% { transform: translateZ(34px) scale(0.95); opacity: 1; }
+  100% { transform: translateZ(24px) scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stone { animation: none; }
@@ -514,86 +558,118 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
   content: "";
   position: absolute;
   border-radius: 50%;
+  top: 8%;
+  left: 13%;
+  width: 42%;
+  height: 27%;
+  background: rgba(255, 255, 255, 0.34);
+  filter: blur(1px);
+  transform: rotate(-18deg);
+  z-index: 3;
 }
 
 /* Classic */
 body[data-skin="classic"] .stone.black {
-  background: radial-gradient(circle at 30% 24%, #7a7a7a 0%, #2c2c2c 34%, #111 71%, #050505 100%);
-  box-shadow: inset 4px 4px 7px rgba(255, 255, 255, 0.16), inset -6px -8px 10px rgba(0, 0, 0, 0.56);
-}
-body[data-skin="classic"] .stone.black::after {
-  top: 15%; left: 22%; width: 32%; height: 20%;
-  background: rgba(255, 255, 255, 0.35); filter: blur(1px);
+  background:
+    radial-gradient(circle at 30% 22%, #8f8f8f 0%, #424242 26%, #171717 64%, #030303 100%),
+    linear-gradient(180deg, #222, #050505);
+  box-shadow:
+    inset 5px 5px 9px rgba(255, 255, 255, 0.18),
+    inset -9px -11px 13px rgba(0, 0, 0, 0.7),
+    0 4px 0 #050505,
+    0 12px 13px rgba(0, 0, 0, 0.42);
 }
 body[data-skin="classic"] .stone.white {
-  background: radial-gradient(circle at 29% 22%, #ffffff 0%, #fbfbfb 33%, #dedede 70%, #c9c9c9 100%);
-  box-shadow: inset 4px 5px 7px rgba(255, 255, 255, 0.82), inset -7px -9px 11px rgba(0, 0, 0, 0.2);
+  background:
+    radial-gradient(circle at 28% 20%, #fff 0%, #fff 24%, #ece9df 63%, #c7c1b6 100%),
+    linear-gradient(180deg, #f8f7f1, #c9c4ba);
+  box-shadow:
+    inset 5px 6px 9px rgba(255, 255, 255, 0.92),
+    inset -9px -11px 13px rgba(95, 82, 68, 0.22),
+    0 4px 0 #b7b0a4,
+    0 12px 13px rgba(0, 0, 0, 0.28);
 }
 body[data-skin="classic"] .stone.white::after {
-  top: 13%; left: 20%; width: 33%; height: 21%;
-  background: rgba(255, 255, 255, 0.82); filter: blur(0.9px);
+  background: rgba(255, 255, 255, 0.84);
 }
 
 /* Panda */
 body[data-skin="panda"] .stone.black {
-  background: radial-gradient(circle at 30% 25%, #555 0%, #1f1f1f 50%, #000);
-  box-shadow: inset 4px 4px 7px rgba(255,255,255,0.15), inset -6px -8px 10px rgba(0,0,0,0.6);
+  background: radial-gradient(circle at 30% 22%, #6a6a6a 0%, #242424 48%, #030303 100%);
 }
 body[data-skin="panda"] .stone.black::after {
   top: 28%; left: 25%; width: 18%; height: 18%;
-  background: #fff; box-shadow: 24px 0 0 #fff;
+  background: #fff;
+  box-shadow: 24px 0 0 #fff;
+  filter: none;
+  transform: none;
 }
 body[data-skin="panda"] .stone.white {
-  background: radial-gradient(circle at 30% 25%, #fff 0%, #e9e9f0 60%, #c2c2cc);
-  box-shadow: inset 4px 4px 7px rgba(255,255,255,0.7), inset -6px -8px 10px rgba(120,120,140,0.35);
+  background: radial-gradient(circle at 30% 22%, #fff 0%, #f5f5fa 50%, #bebecb 100%);
+  box-shadow:
+    inset 5px 6px 9px rgba(255, 255, 255, 0.88),
+    inset -9px -11px 13px rgba(95, 95, 125, 0.28),
+    0 4px 0 #aaaabd,
+    0 12px 13px rgba(0, 0, 0, 0.28);
 }
 
-/* Cat (text-based) */
-body[data-skin="cat"] .stone {
-  background: transparent;
-  box-shadow: none;
-  filter: none;
-  font-size: 200%;
+/* Text/icon skins use a 3D token base so the glyph never shifts off the grid point. */
+body[data-skin="cat"] .stone,
+body[data-skin="emoji"] .stone,
+body[data-skin="fruit"] .stone {
+  background: radial-gradient(circle at 28% 20%, #fff7df 0%, #ffd98d 35%, #c77932 100%);
+  font-size: clamp(0.9rem, 3.2vmin, 1.85rem);
+  line-height: 1;
+  text-shadow: none;
+  color: #111;
+}
+body[data-skin="cat"] .stone.white,
+body[data-skin="emoji"] .stone.white,
+body[data-skin="fruit"] .stone.white {
+  background: radial-gradient(circle at 28% 20%, #fff 0%, #eaf6ff 36%, #6ea1cf 100%);
+}
+body[data-skin="cat"] .stone::before,
+body[data-skin="emoji"] .stone::before,
+body[data-skin="fruit"] .stone::before {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transform: translateY(-1%);
+  z-index: 2;
+  filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.5)) drop-shadow(0 2px 1px rgba(0, 0, 0, 0.22));
 }
 body[data-skin="cat"] .stone.black::before { content: "🐱"; }
 body[data-skin="cat"] .stone.white::before { content: "🐶"; }
-
-body[data-skin="emoji"] .stone {
-  background: transparent;
-  box-shadow: none;
-  filter: none;
-  font-size: 220%;
-}
 body[data-skin="emoji"] .stone.black::before { content: "🌑"; }
 body[data-skin="emoji"] .stone.white::before { content: "🌕"; }
-
-body[data-skin="fruit"] .stone {
-  background: transparent;
-  box-shadow: none;
-  filter: none;
-  font-size: 220%;
-}
 body[data-skin="fruit"] .stone.black::before { content: "🍒"; }
 body[data-skin="fruit"] .stone.white::before { content: "🍑"; }
 
 /* Last move marker */
-.intersection.last-move .stone::before {
+.intersection.last-move::after {
   content: "";
   position: absolute;
-  inset: 38%;
-  border-radius: 50%;
-  background: var(--last-mark);
-  box-shadow: 0 0 6px var(--last-mark);
-  z-index: 2;
-}
-body[data-skin="cat"] .intersection.last-move .stone::before,
-body[data-skin="emoji"] .intersection.last-move .stone::before,
-body[data-skin="fruit"] .intersection.last-move .stone::before {
-  inset: auto;
-  bottom: -2%;
-  right: -2%;
+  left: 50%;
+  top: 50%;
   width: 28%;
   height: 28%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) translateZ(54px);
+  border: max(2px, 0.25vmin) solid var(--last-mark);
+  box-shadow: 0 0 7px var(--last-mark), inset 0 0 4px rgba(255,255,255,0.45);
+  z-index: 5;
+  pointer-events: none;
+}
+body[data-skin="cat"] .intersection.last-move::after,
+body[data-skin="emoji"] .intersection.last-move::after,
+body[data-skin="fruit"] .intersection.last-move::after {
+  left: 72%;
+  top: 72%;
+  width: 18%;
+  height: 18%;
   background: var(--last-mark);
 }
 
@@ -603,8 +679,8 @@ body[data-skin="fruit"] .intersection.last-move .stone::before {
   box-shadow: 0 0 18px gold, 0 0 30px gold !important;
 }
 @keyframes winGlow {
-  from { transform: translateZ(10px) scale(1); }
-  to { transform: translateZ(20px) scale(1.12); }
+  from { transform: translateZ(24px) scale(1); }
+  to { transform: translateZ(34px) scale(1.12); }
 }
 
 /* Dialog */

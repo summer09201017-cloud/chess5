@@ -13,17 +13,23 @@ const serviceWorker = read("service-worker.js");
 const readme = read("README.md");
 const gitignore = read(".gitignore");
 const style = read("style.css");
+const script = read("script.js");
 
 assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v6/);
+assert.match(serviceWorker, /gomoku-pwa-v7/);
 assert.match(gitignore, /\.claude\//);
 assert.match(readme, /npm run verify/);
 assert.match(style, /\.intersection\.last-move::after/);
 assert.match(style, /body\[data-skin="cat"\] \.stone::before/);
 assert.match(style, /--board-thickness/);
+assert.match(style, /--stone-size/);
+assert.doesNotMatch(style, /\.stone[\s\S]*?transform:\s*translateZ/);
+assert.match(style, /overflow:\s*visible/);
+assert.match(script, /function refreshZoomLimit/);
+assert.match(script, /mobile \? 1\.16 : 1\.45/);
 assert.equal(existsSync(join(rootPath, "docs", "screenshot.png")), true);
 
 console.log("static tests passed");

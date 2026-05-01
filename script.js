@@ -145,6 +145,7 @@ buildPuzzleList();
 populateAchievements();
 buildGrid();
 buildIntersections();
+refreshZoomLimit();
 applyRotation();
 attachEvents();
 startAutoRotateLoop();
@@ -315,6 +316,7 @@ function commitMove(row, col, color) {
 function placeStone(row, col, color, animate) {
   const point = pointRefs[row][col];
   point.classList.add("occupied");
+  point.style.setProperty("--stone-stack", String(10 + row));
   point.setAttribute("aria-label",
     `第 ${row+1} 列 第 ${col+1} 行 ${color === "black" ? "黑棋" : "白棋"}`);
   const stone = document.createElement("span");
@@ -772,6 +774,7 @@ function resetGame(opts = {}) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const p = pointRefs[r][c];
       p.classList.remove("occupied", "last-move", "winning", "hint-spot");
+      p.style.removeProperty("--stone-stack");
       p.replaceChildren();
       p.setAttribute("aria-label", `第 ${r+1} 列 第 ${c+1} 行 空位`);
     }
@@ -1047,6 +1050,7 @@ function enterReplay(idx) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const p = pointRefs[r][c];
       p.classList.remove("occupied","last-move","winning");
+      p.style.removeProperty("--stone-stack");
       p.replaceChildren();
     }
   }
@@ -1224,8 +1228,18 @@ function setOnlineStatus(msg) {
 
 /* ---------- 22. 視角 / 自動旋轉 ---------- */
 function applyRotation() {
+  rotation.zoom = clamp(rotation.zoom, Number(zoomRange.min), Number(zoomRange.max));
   board3d.style.transform =
     `rotateX(${rotation.pitch}deg) rotateY(${rotation.yaw}deg) scale(${rotation.zoom})`;
+}
+function refreshZoomLimit() {
+  const mobile = window.matchMedia("(max-width: 980px)").matches;
+  const max = mobile ? 1.16 : 1.45;
+  zoomRange.max = String(max);
+  if (rotation.zoom > max) {
+    rotation.zoom = max;
+    syncControls();
+  }
 }
 function syncControls() {
   yawRange.value = normalizeAngle(rotation.yaw).toFixed(1);
@@ -1536,10 +1550,14 @@ function attachEvents() {
   scene.addEventListener("pointercancel", endDrag);
   scene.addEventListener("wheel", (e) => {
     e.preventDefault();
-    rotation.zoom = clamp(rotation.zoom - e.deltaY * 0.0009, 0.65, 1.45);
+    rotation.zoom = clamp(rotation.zoom - e.deltaY * 0.0009, Number(zoomRange.min), Number(zoomRange.max));
     syncControls();
     applyRotation();
   }, { passive: false });
+  window.addEventListener("resize", () => {
+    refreshZoomLimit();
+    applyRotation();
+  });
   scene.addEventListener("contextmenu", e => e.preventDefault());
 
   // 第一次點擊解鎖音訊

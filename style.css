@@ -336,6 +336,8 @@ body[data-mode="daily"] .pve-only { display: none; }
     linear-gradient(150deg, var(--bg-2), var(--bg-3));
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   transition: background 0.5s ease;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 body[data-theme="cyber"] .scene {
@@ -385,9 +387,12 @@ body[data-theme="sakura"] .scene {
   position: relative;
   transform-style: preserve-3d;
   --board-thickness: clamp(22px, 3.8vmin, 36px);
+  --stone-size: 74%;
   cursor: grab;
   will-change: transform;
   transition: transform 0.18s linear;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .board-3d.is-dragging { cursor: grabbing; transition: none; }
 
@@ -465,7 +470,7 @@ body[data-theme="cyber"] .board-surface {
   position: absolute;
   inset: 0;
 }
-.grid { transform: translateZ(1px); }
+.grid { z-index: 1; }
 
 .grid-line { position: absolute; background: var(--line); }
 .grid-line.vertical { width: max(1px, 0.24%); }
@@ -484,18 +489,25 @@ body[data-theme="cyber"] .grid-line.outer { box-shadow: 0 0 8px var(--line-outer
 }
 body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 
-.intersections { transform-style: preserve-3d; }
+.intersections {
+  z-index: 2;
+  transform-style: flat;
+}
 
 .intersection {
   position: absolute;
-  transform: translate(-50%, -50%) translateZ(18px);
+  transform: translate(-50%, -50%);
   border: 0;
   padding: 0;
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
   isolation: isolate;
+  overflow: visible;
+  z-index: var(--stone-stack, 1);
 }
+.intersection.last-move { z-index: 900; }
+.intersection.winning { z-index: 950; }
 
 .intersection::before {
   content: "";
@@ -525,11 +537,14 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 /* ===== Stones ===== */
 .stone {
   position: absolute;
-  inset: 8%;
+  width: var(--stone-size);
+  height: var(--stone-size);
+  left: 50%;
+  top: 50%;
   border-radius: 50%;
   pointer-events: none;
-  transform: translateZ(24px);
-  transform-style: preserve-3d;
+  transform: translate(-50%, -50%);
+  transform-style: flat;
   filter: drop-shadow(0 9px 5px rgba(0, 0, 0, 0.34));
   animation: drop 0.22s cubic-bezier(0.34, 1.7, 0.64, 1);
   display: flex;
@@ -547,9 +562,9 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
     0 11px 13px rgba(0, 0, 0, 0.34);
 }
 @keyframes drop {
-  0% { transform: translateZ(82px) scale(1.32); opacity: 0; }
-  60% { transform: translateZ(34px) scale(0.95); opacity: 1; }
-  100% { transform: translateZ(24px) scale(1); opacity: 1; }
+  0% { transform: translate(-50%, -50%) translateY(-18%) scale(1.22); opacity: 0; }
+  60% { transform: translate(-50%, -50%) translateY(2%) scale(0.96); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translateY(0) scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stone { animation: none; }
@@ -618,7 +633,7 @@ body[data-skin="cat"] .stone,
 body[data-skin="emoji"] .stone,
 body[data-skin="fruit"] .stone {
   background: radial-gradient(circle at 28% 20%, #fff7df 0%, #ffd98d 35%, #c77932 100%);
-  font-size: clamp(0.9rem, 3.2vmin, 1.85rem);
+  font-size: clamp(0.78rem, 2.45vmin, 1.55rem);
   line-height: 1;
   text-shadow: none;
   color: #111;
@@ -637,7 +652,7 @@ body[data-skin="fruit"] .stone::before {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transform: translateY(-1%);
+  transform: translateY(-2%) scale(0.96);
   z-index: 2;
   filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.5)) drop-shadow(0 2px 1px rgba(0, 0, 0, 0.22));
 }
@@ -657,7 +672,7 @@ body[data-skin="fruit"] .stone.white::before { content: "🍑"; }
   width: 28%;
   height: 28%;
   border-radius: 50%;
-  transform: translate(-50%, -50%) translateZ(54px);
+  transform: translate(-50%, -50%);
   border: max(2px, 0.25vmin) solid var(--last-mark);
   box-shadow: 0 0 7px var(--last-mark), inset 0 0 4px rgba(255,255,255,0.45);
   z-index: 5;
@@ -679,8 +694,8 @@ body[data-skin="fruit"] .intersection.last-move::after {
   box-shadow: 0 0 18px gold, 0 0 30px gold !important;
 }
 @keyframes winGlow {
-  from { transform: translateZ(24px) scale(1); }
-  to { transform: translateZ(34px) scale(1.12); }
+  from { transform: translate(-50%, -50%) scale(1); }
+  to { transform: translate(-50%, -50%) scale(1.12); }
 }
 
 /* Dialog */
@@ -704,6 +719,27 @@ body[data-skin="fruit"] .intersection.last-move::after {
   .app { grid-template-columns: 1fr; gap: 12px; }
   .panel { max-height: none; order: 2; }
   .scene-wrap { min-height: 480px; order: 1; }
-  .scene { width: min(96vw, 880px); height: min(70vh, 700px); }
+  .scene {
+    width: min(96vw, 880px);
+    height: min(70vh, 700px);
+    overflow: visible;
+    perspective: 1000px;
+  }
+  .board-3d {
+    width: min(90vmin, 620px);
+    --board-thickness: clamp(12px, 2.4vmin, 20px);
+    --stone-size: 72%;
+  }
+  .board-base::before,
+  .board-base::after {
+    display: none;
+  }
+  .board-surface {
+    box-shadow:
+      inset 0 2px 2px rgba(255,255,255,0.16),
+      inset 0 -5px 14px rgba(72, 39, 14, 0.18),
+      0 12px 0 rgba(78, 45, 17, 0.32),
+      0 18px 24px rgba(0, 0, 0, 0.24);
+  }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }

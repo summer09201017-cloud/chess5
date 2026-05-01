@@ -1,0 +1,27 @@
+{
+  "name": "3D 五子棋",
+  "short_name": "3D 五子棋",
+  "description": "可 360 度旋轉觀看的 3D 立體感五子棋，包含 AI、禁手、殘局與 PWA 支援。",
+  "lang": "zh-Hant",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3e1c2",
+  "theme_color": "#b9772f",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

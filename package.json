@@ -1,0 +1,11 @@
+{
+  "name": "chess5-3d-gomoku",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "node --check game-rules.js && node --check script.js && node --check service-worker.js && node --check tests/game-rules.test.mjs && node --check tests/static.test.mjs",
+    "test": "node tests/game-rules.test.mjs && node tests/static.test.mjs",
+    "verify": "npm run lint && npm test"
+  }
+}

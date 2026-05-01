@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D 五子棋</title>
+  <meta name="theme-color" content="#b9772f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="3D 五子棋">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="wood" data-skin="classic" data-weather="none">
+  <main class="app">
+    <section class="panel">
+      <header class="panel-head">
+        <h1>3D 五子棋</h1>
+        <p id="status" class="status" aria-live="polite">黑棋先手</p>
+        <div class="timer-row">
+          <div class="timer" id="blackTimer"><span class="timer-label">● 黑</span><span class="timer-value" id="blackTimerValue">--</span></div>
+          <div class="timer" id="whiteTimer"><span class="timer-label">○ 白</span><span class="timer-value" id="whiteTimerValue">--</span></div>
+        </div>
+      </header>
+
+      <div class="action-row">
+        <button id="resetBtn" type="button">重新開始</button>
+        <button id="undoBtn" type="button" class="ghost" title="悔棋（玩家+電腦各一步）">⮌ 悔棋</button>
+        <button id="redoBtn" type="button" class="ghost" title="重做剛才悔的棋">⮍ 重做</button>
+        <button id="hintBtn" type="button" class="ghost" title="讓 AI 幫你建議下一步">💡 提示</button>
+      </div>
+
+      <details open>
+        <summary>對戰模式</summary>
+        <div class="ctrl">
+          <label>對戰類型</label>
+          <select id="modeSelect">
+            <option value="pve" selected>單人 vs 電腦</option>
+            <option value="pvp">本機雙人對戰</option>
+            <option value="online">線上對戰（PeerJS）</option>
+            <option value="puzzle">殘局解謎</option>
+            <option value="daily">每日挑戰</option>
+          </select>
+
+          <label class="pve-only" for="aiLevel">電腦難度</label>
+          <select id="aiLevel" class="pve-only">
+            <option value="easy">簡單</option>
+            <option value="normal" selected>普通</option>
+            <option value="hard">困難</option>
+            <option value="master">大師（深搜）</option>
+          </select>
+
+          <label class="pve-only">玩家先後手</label>
+          <div class="pve-only radio-row" role="radiogroup" aria-label="玩家先後手">
+            <label><input type="radio" name="playerColor" value="black" checked>我下黑棋</label>
+            <label><input type="radio" name="playerColor" value="white">我下白棋</label>
+            <label><input type="radio" name="playerColor" value="random">隨機</label>
+          </div>
+
+          <label for="boardSize">棋盤大小</label>
+          <select id="boardSize">
+            <option value="9">9 × 9（快戰）</option>
+            <option value="13">13 × 13</option>
+            <option value="15" selected>15 × 15（標準）</option>
+            <option value="19">19 × 19（圍棋盤）</option>
+          </select>
+
+          <label class="check-row">
+            <input id="forbiddenToggle" type="checkbox">
+            黑棋禁手（三三 / 四四 / 長連）
+          </label>
+        </div>
+      </details>
+
+      <details>
+        <summary>計時模式</summary>
+        <div class="ctrl">
+          <label for="timerMode">每步思考時間</label>
+          <select id="timerMode">
+            <option value="0" selected>不限時</option>
+            <option value="10">10 秒（閃電）</option>
+            <option value="30">30 秒（快棋）</option>
+            <option value="60">60 秒</option>
+            <option value="180">3 分鐘</option>
+          </select>
+          <p class="hint">超時直接判負，最後 5 秒會有心跳音效。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>視角</summary>
+        <div class="ctrl">
+          <div class="preset-row">
+            <button type="button" class="ghost preset" data-preset="flat">正視</button>
+            <button type="button" class="ghost preset" data-preset="slant">斜視</button>
+            <button type="button" class="ghost preset" data-preset="top">俯瞰</button>
+            <button type="button" class="ghost preset" data-preset="fpv">第一人稱</button>
+          </div>
+          <label for="yawRange">水平旋轉</label>
+          <input id="yawRange" type="range" min="0" max="360" step="0.1" value="0">
+          <label for="pitchRange">上下俯仰</label>
+          <input id="pitchRange" type="range" min="-80" max="80" step="0.1" value="0">
+          <label for="zoomRange">縮放</label>
+          <input id="zoomRange" type="range" min="0.65" max="1.45" step="0.01" value="1.00">
+          <label class="check-row">
+            <input id="autoSpin" type="checkbox">
+            自動旋轉
+          </label>
+        </div>
+      </details>
+
+      <details>
+        <summary>外觀（主題 / 棋子 / 天氣）</summary>
+        <div class="ctrl">
+          <label for="themeSelect">棋盤主題</label>
+          <select id="themeSelect">
+            <option value="wood" selected>木紋（傳統）</option>
+            <option value="marble">大理石</option>
+            <option value="cyber">賽博龐克霓虹</option>
+            <option value="sakura">和風櫻花</option>
+          </select>
+
+          <label for="skinSelect">棋子皮膚</label>
+          <select id="skinSelect">
+            <option value="classic" selected>經典黑白</option>
+            <option value="panda">貓熊珍珠</option>
+            <option value="cat">貓貓狗狗</option>
+            <option value="emoji">Emoji（🌑/🌕）</option>
+            <option value="fruit">水果（🍒/🍑）</option>
+          </select>
+
+          <label for="weatherSelect">天氣場景</label>
+          <select id="weatherSelect">
+            <option value="none" selected>無</option>
+            <option value="snow">下雪 ❄</option>
+            <option value="rain">下雨 ☔</option>
+            <option value="sakura">櫻花飄落 🌸</option>
+            <option value="stars">星空 ✨</option>
+          </select>
+
+          <label class="check-row">
+            <input id="soundToggle" type="checkbox" checked>
+            落子音效
+          </label>
+        </div>
+      </details>
+
+      <details>
+        <summary>戰績與成就</summary>
+        <div class="ctrl">
+          <div class="stats-grid" id="statsGrid">
+            <div><span>黑勝</span><strong id="statBlack">0</strong></div>
+            <div><span>白勝</span><strong id="statWhite">0</strong></div>
+            <div><span>平手</span><strong id="statDraw">0</strong></div>
+            <div><span>連勝</span><strong id="statStreak">0</strong></div>
+          </div>
+          <button type="button" id="resetStatsBtn" class="ghost">清除戰績</button>
+          <h4 class="sub-h">成就</h4>
+          <ul id="achievements" class="achv-list"></ul>
+        </div>
+      </details>
+
+      <details>
+        <summary>棋譜匯出 / 分享 / 回放</summary>
+        <div class="ctrl">
+          <div class="action-row">
+            <button type="button" id="exportBtn" class="ghost">📋 複製棋譜</button>
+            <button type="button" id="importBtn" class="ghost">📥 匯入棋譜</button>
+            <button type="button" id="shareBtn" class="ghost">🔗 分享連結</button>
+          </div>
+          <div class="replay-row">
+            <button type="button" id="replayPrev" class="ghost mini">◀</button>
+            <span id="replayPos" class="replay-pos">--/--</span>
+            <button type="button" id="replayNext" class="ghost mini">▶</button>
+          </div>
+          <p class="hint">用座標格式（H8、G7…）匯出，貼回即可重播。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>殘局解謎</summary>
+        <div class="ctrl">
+          <select id="puzzleSelect"></select>
+          <button type="button" id="puzzleStart" class="ghost">開始挑戰</button>
+          <p id="puzzleHint" class="hint">選擇題目，找出致勝關鍵手。</p>
+          <div id="puzzleStars" class="stars"></div>
+        </div>
+      </details>
+
+      <details>
+        <summary>線上對戰</summary>
+        <div class="ctrl">
+          <button type="button" id="hostBtn" class="ghost">🏠 開房間</button>
+          <input type="text" id="joinCode" placeholder="輸入房號加入對戰">
+          <button type="button" id="joinBtn" class="ghost">🚪 加入房間</button>
+          <p id="onlineStatus" class="hint">尚未連線。開房後把房號傳給朋友即可對戰。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>安裝 APP</summary>
+        <div class="ctrl">
+          <button id="installBtn" type="button" class="install-btn" hidden>安裝 APP</button>
+          <p id="installHelp" class="hint">偵測中...</p>
+        </div>
+      </details>
+
+      <p class="hint hint-foot">💡 小技巧：點棋盤外可拖曳旋轉視角，滾輪縮放。</p>
+    </section>
+
+    <section class="scene-wrap">
+      <div id="scene" class="scene">
+        <canvas id="weatherCanvas" class="weather-canvas" aria-hidden="true"></canvas>
+        <canvas id="confettiCanvas" class="confetti-canvas" aria-hidden="true"></canvas>
+        <div id="commentaryBubble" class="commentary" aria-live="polite" hidden></div>
+        <div id="board3d" class="board-3d">
+          <div class="board-base"></div>
+          <div id="boardSurface" class="board-surface">
+            <div id="grid" class="grid"></div>
+            <div id="intersections" class="intersections"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="importDialog" class="dialog">
+    <form method="dialog">
+      <h3>匯入棋譜</h3>
+      <p class="hint">支援格式：座標序列以空白或逗號分隔，例如 <code>H8 I9 G7 ...</code></p>
+      <textarea id="importText" rows="6" placeholder="H8 I9 G7 J10..."></textarea>
+      <div class="action-row">
+        <button type="button" id="importConfirm">匯入</button>
+        <button type="submit" class="ghost">取消</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>

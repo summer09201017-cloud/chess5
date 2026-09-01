@@ -159,7 +159,7 @@ button {
   transition: transform 0.15s ease, filter 0.15s ease;
   font-family: inherit;
 }
-button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); }
+button:not(.intersection):hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); }
 button:disabled { cursor: not-allowed; filter: saturate(0.7) brightness(0.92); transform: none; }
 
 button.ghost {
@@ -498,6 +498,9 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 
 .intersection {
   position: absolute;
+  transform: none;
+  filter: none;
+  transition: none;
   border: 0;
   padding: 0;
   border-radius: 50%;

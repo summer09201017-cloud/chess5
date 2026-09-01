@@ -364,8 +364,10 @@ body[data-theme="sakura"] .scene {
 .commentary {
   position: absolute;
   top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  width: max-content;
+  margin-inline: auto;
   padding: 8px 14px;
   border-radius: 18px;
   background: rgba(0, 0, 0, 0.75);
@@ -377,8 +379,8 @@ body[data-theme="sakura"] .scene {
   animation: bubbleIn 0.3s ease;
 }
 @keyframes bubbleIn {
-  from { opacity: 0; transform: translate(-50%, -8px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
 }
 
 .board-3d {
@@ -389,12 +391,11 @@ body[data-theme="sakura"] .scene {
   --board-thickness: clamp(22px, 3.8vmin, 36px);
   --stone-size: 74%;
   cursor: grab;
-  will-change: transform;
   transition: transform 0.18s linear;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-.board-3d.is-dragging { cursor: grabbing; transition: none; }
+.board-3d.is-dragging { cursor: grabbing; transition: none; will-change: transform; }
 
 .board-base {
   position: absolute;
@@ -473,8 +474,8 @@ body[data-theme="cyber"] .board-surface {
 .grid { z-index: 1; }
 
 .grid-line { position: absolute; background: var(--line); }
-.grid-line.vertical { width: max(1px, 0.24%); }
-.grid-line.horizontal { height: max(1px, 0.24%); }
+.grid-line.vertical { width: max(1px, 0.24%); margin-left: calc(max(1px, 0.24%) * -0.5); }
+.grid-line.horizontal { height: max(1px, 0.24%); margin-top: calc(max(1px, 0.24%) * -0.5); }
 .grid-line.outer { background: var(--line-outer); }
 body[data-theme="cyber"] .grid-line { box-shadow: 0 0 4px var(--line); }
 body[data-theme="cyber"] .grid-line.outer { box-shadow: 0 0 8px var(--line-outer); }
@@ -485,7 +486,8 @@ body[data-theme="cyber"] .grid-line.outer { box-shadow: 0 0 8px var(--line-outer
   aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: var(--star);
-  transform: translate(-50%, -50%);
+  margin-left: -0.55%;
+  margin-top: -0.55%;
 }
 body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 
@@ -496,7 +498,6 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 
 .intersection {
   position: absolute;
-  transform: translate(-50%, -50%);
   border: 0;
   padding: 0;
   border-radius: 50%;
@@ -537,13 +538,9 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 /* ===== Stones ===== */
 .stone {
   position: absolute;
-  width: var(--stone-size);
-  height: var(--stone-size);
-  left: 50%;
-  top: 50%;
+  inset: calc((100% - var(--stone-size)) / 2);
   border-radius: 50%;
   pointer-events: none;
-  transform: translate(-50%, -50%);
   transform-style: flat;
   filter: none;
   animation: drop 0.22s cubic-bezier(0.34, 1.7, 0.64, 1);
@@ -558,9 +555,9 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
   box-shadow: none;
 }
 @keyframes drop {
-  0% { transform: translate(-50%, -50%) translateY(-18%) scale(1.22); opacity: 0; }
-  60% { transform: translate(-50%, -50%) translateY(2%) scale(0.96); opacity: 1; }
-  100% { transform: translate(-50%, -50%) translateY(0) scale(1); opacity: 1; }
+  0% { transform: translateY(-18%) scale(1.22); opacity: 0; }
+  60% { transform: translateY(2%) scale(0.96); opacity: 1; }
+  100% { transform: none; opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stone { animation: none; }
@@ -649,12 +646,8 @@ body[data-skin="fruit"] .stone.white::before { content: "🍑"; }
 .intersection.last-move::after {
   content: "";
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 28%;
-  height: 28%;
+  inset: 36%;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
   border: max(2px, 0.25vmin) solid var(--last-mark);
   box-shadow: none;
   z-index: 5;
@@ -663,10 +656,7 @@ body[data-skin="fruit"] .stone.white::before { content: "🍑"; }
 body[data-skin="cat"] .intersection.last-move::after,
 body[data-skin="emoji"] .intersection.last-move::after,
 body[data-skin="fruit"] .intersection.last-move::after {
-  left: 72%;
-  top: 72%;
-  width: 18%;
-  height: 18%;
+  inset: 63% 19% 19% 63%;
   background: var(--last-mark);
 }
 
@@ -677,8 +667,8 @@ body[data-skin="fruit"] .intersection.last-move::after {
   outline-offset: max(1px, 0.12vmin);
 }
 @keyframes winGlow {
-  from { transform: translate(-50%, -50%) scale(1); }
-  to { transform: translate(-50%, -50%) scale(1.12); }
+  from { transform: scale(1); }
+  to { transform: scale(1.12); }
 }
 
 /* Dialog */

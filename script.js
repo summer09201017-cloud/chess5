@@ -216,6 +216,10 @@ function buildIntersections() {
       p.style.top = toPercent(ratioAtIndex(r));
       p.style.width = toPercent(HOTSPOT_RATIO);
       p.style.height = toPercent(HOTSPOT_RATIO);
+      // 用負邊距置中，不用 transform: translate(-50%,-50%)：
+      // 百分比位移在 GPU 合成圖層上可能被解析成 0，棋子會整顆跳到右下再彈回。
+      p.style.marginLeft = toPercent(-HOTSPOT_RATIO / 2);
+      p.style.marginTop = toPercent(-HOTSPOT_RATIO / 2);
       p.setAttribute("aria-label", `第 ${r+1} 列 第 ${c+1} 行 空位`);
       p.addEventListener("click", onPointClick);
       // 阻止 pointerdown 冒泡到 scene 的拖曳處理器，避免微抖動吃掉 click

@@ -19,7 +19,7 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v8/);
+assert.match(serviceWorker, /gomoku-pwa-v9/);
 assert.match(gitignore, /\.claude\//);
 assert.match(readme, /npm run verify/);
 assert.match(style, /\.intersection\.last-move::after/);

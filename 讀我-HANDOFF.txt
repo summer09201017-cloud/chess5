@@ -115,10 +115,14 @@
   CLAUDE.md           給 AI 的專案說明(先讀這份)
   roadmap.md          待做清單
 
-■ 下一步最該做的一件事
-  在 GitHub repo 加兩個 secret:CLOUDFLARE_API_TOKEN 與 CLOUDFLARE_ACCOUNT_ID
-  (⏱5 分 ★★★,★ 只有使用者能做,金鑰不經 AI)。
-  加完之後 push 就會自動部署到 pages.dev;在那之前要用 npm run deploy 手動出版。
+■ 部署方式(★ 0902 使用者拍板:**不加 secret,維持手動** —— 別再把這件事列成待辦問他)
+  理由:這站低頻改動、其他七款棋全是手動、不存在的金鑰不會外洩;
+  「改了沒部署」的 drift 有 /deploy-drift-scan 兜底。哪天進入頻繁改動期再議。
+  手動出版兩行(0902 實跑過,線上四指紋驗證法見 skills repo HANDOFF 0902 ★段):
+    npm run stage
+    npx wrangler pages deploy .deploy --project-name=5-chess --branch=main --commit-dirty=true
+  ⚠ CI 的部署步驟沒 secret 時會**跳過但 CI 照綠**(刻意設計)——綠勾勾不等於已上線。
+  ⚠ 別把上面兩行包成一條 npm script 一行到底:zero-pii-guard 會解析不到部署目錄=守門被繞過。
 
 ■ 一鍵裝齊 skill(換機時)
   git clone https://github.com/summer09201017-cloud/hfpc-claude-skills

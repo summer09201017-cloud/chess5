@@ -444,11 +444,33 @@ function redoMove() {
   commitMove(m.row, m.col, m.color);
 }
 
+/* 💡 AI 提示(2026-09-01 全艦隊棋類批次時一併修好)
+   ★ 原本用的是 AI_LEVELS.hard —— 而 hard 是 { randomTop: 2, mistake: 0.03 }:
+     ①從前兩名裡**隨機**挑 ⇒ 同一個局面按兩次會給不同的點,看起來像跳針;
+     ②有 **3% 機率故意挑一步更差的**(pickByDifficulty 的 mistake 分支)
+       ⇒ 提示偶爾會叫你走壞棋,而你永遠不會知道是哪一次。
+     對手該不該犯錯是難度設計,**提示不該** —— 提示是你問「最好怎麼走」的答案。
+   ⇒ 改用同檔案裡就有的 master:{ randomTop: 1, mistake: 0, lookahead: 3 },最強且決定性。
+   ★ 再加一層同局面快取:master 雖然沒有隨機挑,但開局書那兩手仍有 Math.random(),
+     而且將來調參也可能把隨機性放回來 —— 綁在局面上就不必再擔心這件事。 */
+let hintCache = null;   // { key, row, col }
+
+function hintKey() {
+  return currentPlayer + "|" + boardState.map(r => r.map(c => c || ".").join("")).join("");
+}
+
 function showHint() {
   if (gameOver || aiThinking) return;
-  const config = AI_LEVELS.hard;
-  const move = chooseAiMove(config, currentPlayer);
-  if (!move) return;
+
+  const key = hintKey();
+  let move = (hintCache && hintCache.key === key) ? hintCache : null;
+
+  if (!move) {
+    move = chooseAiMove(AI_LEVELS.master, currentPlayer);
+    if (!move) { bubble("💡 找不到可以下的位置了"); return; }   // 三態:誠實說沒有
+    hintCache = { key, row: move.row, col: move.col };
+  }
+
   const el = pointRefs[move.row][move.col];
   el.classList.add("hint-spot");
   setTimeout(() => el.classList.remove("hint-spot"), 1800);

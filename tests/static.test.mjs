@@ -19,7 +19,16 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v10/);
+assert.match(serviceWorker, /gomoku-pwa-v11/);
+
+/* 💡 提示必須用 master 檔位,不可以用 hard。
+   hard 是 { randomTop: 2, mistake: 0.03 } ⇒ 從前兩名隨機挑(按兩次會跳針)、
+   而且有 3% 機率**故意**挑一步更差的。對手該不該犯錯是難度設計,提示不該 ——
+   提示是玩家問「最好怎麼走」的答案。這一條就是釘死不准改回去。 */
+assert.match(script, /chooseAiMove\(AI_LEVELS\.master, currentPlayer\)/);
+assert.doesNotMatch(script, /const config = AI_LEVELS\.hard;\s*\n\s*const move = chooseAiMove/);
+// 同局面按兩次要回同一手 ⇒ 一定要有快取那條路
+assert.match(script, /hintCache && hintCache\.key === key/);
 assert.match(gitignore, /\.claude\//);
 assert.match(readme, /npm run verify/);
 assert.match(style, /\.intersection\.last-move::after/);

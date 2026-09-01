@@ -6,7 +6,10 @@
 
 純前端 PWA 五子棋,**無建置步驟**(沒有 npm 套件、沒有 bundler)——改完檔案直接就是產物。
 - GitHub:`summer09201017-cloud/chess5`
-- 線上正式站:<https://5-chess.pages.dev>(Cloudflare Pages)
+- 線上正式站:<https://5-chess.pages.dev>(Cloudflare Pages)—— **唯一正式網址**
+- 舊網址 <https://5-chess.netlify.app> 已於 2026-09-01 掛 301 轉址到 pages.dev,
+  Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
+  還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
 ## 現況(2026-09-01)
 
@@ -49,19 +52,23 @@
 4. **改了 `index.html`/`style.css`/`script.js`/`game-rules.js` 就要 bump `service-worker.js` 的 `CACHE_NAME`**,
    否則已安裝的 PWA 永遠吃舊快取(它是 cache-first)。`tests/static.test.mjs` 有硬編版本號,要一起改。
 5. **push 到 GitHub 不會上線。** 見下面「部署」。
-6. `.github/workflows/deploy-pages.yml` **自 2026-05-01 起每次 push 都失敗**——
-   repo 的 GitHub Pages 根本沒啟用(`gh api repos/.../pages` = 404)。紅燈是預期的,不是新壞掉;
-   要不要移除見 `roadmap.md`。
+6. **部署清單的單一真相之源是 `scripts/stage.mjs`**,不要另外手抄一份要上傳哪些檔。
+   它同時會檢查 `service-worker.js` 的 CORE_ASSETS 每一項都真的在 `.deploy/` 裡
+   (少一個 → 安裝時 `cache.addAll` 整批失敗 → PWA 靜默地不再離線可玩)。
 
-## 部署(重要)
+## 部署
 
-Cloudflare Pages 專案 `5-chess` 是 **direct upload**(Git Provider: No)——**push 不會自動部署**。
+Cloudflare Pages 專案 `5-chess` 是 **direct upload**(不連 Git),所以由
+`.github/workflows/deploy-cloudflare.yml` 用 wrangler 推上去。
 
+- **push 到 main → CI 跑 `npm run verify`,再自動部署到 pages.dev。**
+  前提是 repo 已設好 secrets `CLOUDFLARE_API_TOKEN` 與 `CLOUDFLARE_ACCOUNT_ID`;
+  **沒設好時部署那一步會被跳過、CI 仍是綠的**(只跑驗證),不會留紅燈。
+- 本機要手動出一版:`npm run deploy`(= verify → stage → wrangler pages deploy)。
+
+部署後驗版號:
 ```bash
-npm run verify                      # 先綠
-# 只放站台檔,不要把 .git/.wrangler/tests/node_modules 傳上去
-npx wrangler pages deploy <乾淨目錄> --project-name=5-chess --branch=main --commit-dirty=true
-curl -s "https://5-chess.pages.dev/service-worker.js?b=$(date +%s)" | head -1   # 驗版號
+curl -s "https://5-chess.pages.dev/service-worker.js?b=<隨機數>" | head -1
 ```
 
 ## 驗收

@@ -10,13 +10,16 @@
 - PWA 安裝與離線
 - **2026-09-01 棋子對位**:落子對不到十字交叉線、落子先往右下再彈回、滑鼠移過棋子被推走
   → 三者同一根因(全域 `button:hover` 蓋掉交點的置中 transform),已修並實測全盤偏差 0.008px
+- **2026-09-01 部署收斂**:網址收斂到 `5-chess.pages.dev`(舊的 netlify.app 掛 301、停止自動建置);
+  刪掉從不生效的 GitHub Pages workflow,換成「push → verify → 部署 CF Pages」;
+  部署清單改由 `scripts/stage.mjs` 單一真相之源統一管理,並加上 `npm run stage` / `npm run deploy`
 
 ## 🔜 待做(按 CP 值 × 開發時間)
 
 | 項目 | ⏱ | ★ | 說明 |
 |---|---|---|---|
-| **決定 GitHub Pages workflow 去留** | 5 分 | ★★★ | `.github/workflows/deploy-pages.yml` 自 2026-05-01 起**每次 push 都失敗**(repo 未啟用 Pages)。要嘛啟用 Pages、要嘛刪掉 workflow。現在每次推送都留一顆紅燈,會誤導下一手。**需使用者拍板** |
-| 部署腳本化 | 20 分 | ★★★ | 現在部署要手動組乾淨目錄再 `wrangler pages deploy`。寫成 `npm run deploy`(自動排除 `.git`/`.wrangler`/`tests`/`node_modules`),避免哪次手滑把 `.wrangler` 傳上去 |
+| **在 GitHub 加兩個 secret** | 5 分 | ★★★ | `CLOUDFLARE_API_TOKEN`(權限 Account → Cloudflare Pages → Edit)與 `CLOUDFLARE_ACCOUNT_ID`。加完之後 push 就會自動部署到 pages.dev;**沒加之前 CI 是綠的、只跑驗證,得繼續用 `npm run deploy` 手動出版**。★ 只有使用者能做(金鑰不經 AI) |
+| 一個月後刪掉 Netlify 站 | 5 分 | ★★ | 2026-10-01 之後。轉址掛滿一個月再刪(照 netlify-to-cloudflare-migrate 慣例)。還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4` |
 | SW 版號自動化 | 20 分 | ★★ | `CACHE_NAME` 與 `tests/static.test.mjs` 兩處硬編,要人記得同時改。改成測試只驗格式 `gomoku-pwa-v\d+`,再加一個 pre-push 檢查「殼層檔有動就必須 bump」 |
 | 對位迴歸測試 | 40 分 | ★★ | 把這次的 Playwright 量測(全盤交點 vs 格線、hover 三態)收成 `tests/alignment.mjs`,避免再有人用 transform 做定位而沒人發現 |
 | 手機觸控落子放大鏡 | 60 分 | ★★ | 手機上棋子直徑約 16px,手指會蓋住目標。按住時在上方顯示放大預覽,放開才落子 |

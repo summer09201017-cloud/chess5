@@ -7,7 +7,10 @@
   改完檔案本身就是產物。
 
   GitHub      : https://github.com/summer09201017-cloud/chess5
-  線上正式站  : https://5-chess.pages.dev   (Cloudflare Pages)
+  線上正式站  : https://5-chess.pages.dev   (Cloudflare Pages)★ 唯一正式網址
+  舊網址      : https://5-chess.netlify.app → 2026-09-01 起 301 轉址到 pages.dev
+                (Netlify 自動建置已停;留置一個月後再刪站,
+                 還原點 deploy 6a96a4c9f62e310008e8a2a4)
   本機工作副本: C:\Users\agape250\Desktop\chess5
 
 ■ 現在到哪
@@ -49,9 +52,11 @@
 
 ■ 版控狀態(2026-09-01 打包前實查,不是憑印象)
   git -C chess5 status --short              → (空)
-  git -C chess5 log --oneline -1            → fece9d0 Stop the generic button hover lift ...
   git -C chess5 rev-list --count @{u}..HEAD → 0   (已全部 push)
-  線上已部署並驗過:style.css 含 button:not(.intersection);service-worker.js 為 gomoku-pwa-v10
+  最後一顆「程式」變更:fece9d0 Stop the generic button hover lift ...
+  ※ 之後只有文件與部署設定的 commit,SHA 會比上面新——以 git log 為準,別拿這行當唯一依據。
+  線上實測:pages.dev 與當時的 netlify.app 各 9/9 檔逐位元與 repo 相同;
+            service-worker.js 為 gomoku-pwa-v10;style.css 含 button:not(.intersection)
 
 ■ 怎麼跑 / 怎麼測
   # 本機預覽(不能用 file:// 開,ES module + PWA 需要 http)
@@ -60,15 +65,23 @@
   # 測試(不需 npm install)
   npm run verify                    # = lint + 單元測試,必須全綠
 
-■ 怎麼部署(★ 最容易踩的一條)
-  Cloudflare Pages 專案 5-chess 是 direct upload(Git Provider: No)。
-  push 到 GitHub 不會上線,一定要手動:
+■ 怎麼部署(2026-09-01 改成自動)
+  CF Pages 專案 5-chess 是 direct upload(不連 Git),所以由
+  .github/workflows/deploy-cloudflare.yml 用 wrangler 推上去:
 
-    npm run verify
-    # 組一個只放站台檔的目錄:index.html style.css script.js game-rules.js
-    #                          manifest.webmanifest service-worker.js icons/
-    # 千萬別把 .git / .wrangler / tests / node_modules 傳上去
-    npx wrangler pages deploy <該目錄> --project-name=5-chess --branch=main --commit-dirty=true
+    push 到 main → CI 跑 npm run verify → npm run stage → 部署到 pages.dev
+
+  ⚠ 前提是 repo 已設好兩個 secret(Settings → Secrets and variables → Actions):
+      CLOUDFLARE_API_TOKEN   權限 Account → Cloudflare Pages → Edit
+      CLOUDFLARE_ACCOUNT_ID  儀表板網址裡那串 32 位十六進位
+    **沒設好時部署那一步會被跳過、CI 仍是綠的**(只跑驗證),不會留紅燈,
+    但也就沒有自動部署——那段期間要用本機手動出版:
+
+      npm run deploy        # = verify → stage → wrangler pages deploy .deploy
+
+  ★ 哪些檔案會上線,一律以 scripts/stage.mjs 為準,不要另外手抄清單。
+    它同時會檢查 service-worker.js 的 CORE_ASSETS 每一項都真的在 .deploy/ 裡
+    (少一個 → 安裝時 cache.addAll 整批失敗 → PWA 靜默地不再離線可玩)。
 
   部署後驗版號:
     curl -s "https://5-chess.pages.dev/service-worker.js?b=<隨機數>" | head -1
@@ -81,9 +94,8 @@
   4. 改了 index.html / style.css / script.js / game-rules.js
      → 必須 bump service-worker.js 的 CACHE_NAME(cache-first,不 bump 使用者永遠吃舊版),
        且 tests/static.test.mjs 內有硬編版本號,要一起改。
-  5. .github/workflows/deploy-pages.yml 自 2026-05-01 起每次 push 都失敗
-     —— repo 的 GitHub Pages 沒啟用(gh api repos/.../pages 回 404)。
-     那顆紅燈是預期的、不是新壞掉。去留待使用者拍板(見 roadmap.md 第一列)。
+  5. (已解決)原本的 .github/workflows/deploy-pages.yml 自 2026-05-01 起每次 push 都失敗
+     —— repo 的 GitHub Pages 從沒啟用過。2026-09-01 已刪除,換成 deploy-cloudflare.yml。
 
 ■ 版面 / 對位類改動的驗法(這次的教訓)
   · 一定要用真瀏覽器量,而且要量「棋子 vs 格線」——
@@ -104,8 +116,9 @@
   roadmap.md          待做清單
 
 ■ 下一步最該做的一件事
-  決定 .github/workflows/deploy-pages.yml 的去留(⏱5 分 ★★★,需使用者拍板)——
-  它每次 push 都留一顆紅燈,會讓下一手誤以為專案壞了。
+  在 GitHub repo 加兩個 secret:CLOUDFLARE_API_TOKEN 與 CLOUDFLARE_ACCOUNT_ID
+  (⏱5 分 ★★★,★ 只有使用者能做,金鑰不經 AI)。
+  加完之後 push 就會自動部署到 pages.dev;在那之前要用 npm run deploy 手動出版。
 
 ■ 一鍵裝齊 skill(換機時)
   git clone https://github.com/summer09201017-cloud/hfpc-claude-skills

@@ -50,26 +50,37 @@ npm run verify
 
 正式站：<https://5-chess.pages.dev>（Cloudflare Pages）
 
-> ⚠ Cloudflare Pages 專案 `5-chess` 是 **direct upload**（不連 Git），
-> **推到 GitHub 不會自動上線**，一定要手動部署。
+推送到 `main` 之後，`.github/workflows/deploy-cloudflare.yml` 會先跑 `npm run verify`，
+再用 wrangler 部署到 Cloudflare Pages。
+
+要在本機手動出一版：
 
 ```bash
-npm run verify
-# 準備一個只放站台檔的目錄：index.html style.css script.js game-rules.js
-# manifest.webmanifest service-worker.js icons/
-# 不要把 .git / .wrangler / tests / node_modules 傳上去
-npx wrangler pages deploy <該目錄> --project-name=5-chess --branch=main --commit-dirty=true
+npm run deploy      # = verify → stage → wrangler pages deploy .deploy
 ```
+
+`npm run stage` 會把要上線的檔案整理進 `.deploy/`。
+**哪些檔案會上線，一律以 `scripts/stage.mjs` 為準**，不要另外手抄清單。
 
 改了 `index.html` / `style.css` / `script.js` / `game-rules.js`，
 **務必同時 bump `service-worker.js` 的 `CACHE_NAME`**（快取是 cache-first，
 不 bump 的話已安裝的 PWA 會一直用舊版），`tests/static.test.mjs` 內的版本號要一起改。
 
-### GitHub Pages（目前未啟用）
+### 啟用自動部署需要的設定
 
-`.github/workflows/deploy-pages.yml` 仍在 repo 裡，但這個 repo 的 GitHub Pages
-**沒有啟用**，因此該 workflow 自 2026-05-01 起每次推送都會失敗。
-那顆紅燈是預期的，不代表專案壞掉；去留見 `roadmap.md`。
+到 repo 的 `Settings → Secrets and variables → Actions` 新增兩個 secret：
+
+| Secret | 內容 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token，權限選 `Account → Cloudflare Pages → Edit` |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 儀表板網址裡那串 32 位十六進位 |
+
+**還沒設好之前，CI 仍然是綠的**——部署那一步會自動跳過，只跑驗證。
+
+### 舊網址
+
+`https://5-chess.netlify.app` 已於 2026-09-01 改為 301 轉址到 pages.dev，
+Netlify 端的自動建置已停止。舊連結與已安裝的舊 PWA 靠這個轉址繼續可用。
 
 ## 主要檔案
 

@@ -46,18 +46,30 @@ npm run verify
 - 黑棋禁手規則：合法五連、長連、雙四、雙三
 - AI 評分使用的威脅分析分數
 
-## 部署到 GitHub Pages
+## 部署
 
-專案已內建 GitHub Actions workflow：
+正式站：<https://5-chess.pages.dev>（Cloudflare Pages）
 
-- `.github/workflows/deploy-pages.yml`
+> ⚠ Cloudflare Pages 專案 `5-chess` 是 **direct upload**（不連 Git），
+> **推到 GitHub 不會自動上線**，一定要手動部署。
 
-部署步驟：
+```bash
+npm run verify
+# 準備一個只放站台檔的目錄：index.html style.css script.js game-rules.js
+# manifest.webmanifest service-worker.js icons/
+# 不要把 .git / .wrangler / tests / node_modules 傳上去
+npx wrangler pages deploy <該目錄> --project-name=5-chess --branch=main --commit-dirty=true
+```
 
-1. 把整個專案推到 GitHub repository。
-2. 到 GitHub 的 `Settings > Pages`。
-3. 在 `Build and deployment` 中確認來源使用 `GitHub Actions`。
-4. 推送到預設分支後，GitHub 會自動部署。
+改了 `index.html` / `style.css` / `script.js` / `game-rules.js`，
+**務必同時 bump `service-worker.js` 的 `CACHE_NAME`**（快取是 cache-first，
+不 bump 的話已安裝的 PWA 會一直用舊版），`tests/static.test.mjs` 內的版本號要一起改。
+
+### GitHub Pages（目前未啟用）
+
+`.github/workflows/deploy-pages.yml` 仍在 repo 裡，但這個 repo 的 GitHub Pages
+**沒有啟用**，因此該 workflow 自 2026-05-01 起每次推送都會失敗。
+那顆紅燈是預期的，不代表專案壞掉；去留見 `roadmap.md`。
 
 ## 主要檔案
 

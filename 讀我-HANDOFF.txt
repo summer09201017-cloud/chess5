@@ -1,5 +1,5 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-01
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-02(殘局解謎重做)
 ================================================================================
 
 ■ 這是什麼
@@ -13,8 +13,27 @@
                  還原點 deploy 6a96a4c9f62e310008e8a2a4)
   本機工作副本: C:\Users\agape250\Desktop\chess5
 
-■ 現在到哪
-  2026-09-01 修好使用者回報的「落子對不到十字交叉線」。
+■ ★ 現在到哪(2026-09-02:殘局解謎重做)
+  使用者原話:「殘局解謎,只有 8 題,太少題目,又太簡單」。
+  病不只題少:舊版「剩 N 步」從不遞減、對手用會犯錯的 hard 檔、答錯不判負 ⇒ 其實是「從一個局面跟電腦下」。
+
+  已完成(全部驗過:npm run verify 全綠、scripts/smoke-puzzles.mjs 真瀏覽器 23 項全過):
+    · puzzle-solver.js  解題器(威脅空間搜尋 + VCF,單趟分支定界;瀏覽器/Node 同一支)
+    · puzzles.js        題庫 67 題、四級(入門 16・進階 16・高手 20・大師 15;黑先 34 / 白先 33),最深 7 步;
+                        scripts/gen-puzzles.mjs 自我對弈 600 局生成、逐題證明(種子 20260902,可重現)
+    · tests/puzzles.test.mjs 每次 npm test 把每一題重新證明(target 步必勝、target-1 殺不了、正解首手數、守備唯一擋點)
+    · 解謎流程:步數遞減 / 對手最頑強防守(puzzleBestDefence)/ 走錯立刻 ❌ 可重試 / 守備題答錯對手演示連殺 /
+      三級星等只記最佳(gomoku.puzzles)/ 分級進度 / ?puzzle=<id> 深連結 / 🔗 複製題目連結 / 開機接續上次那題
+    · SW gomoku-pwa-v12(CORE_ASSETS + puzzle-solver.js、puzzles.js);stage.mjs 部署清單同步
+  待做(見 roadmap.md 待做表):大師級守備題補滿、每日挑戰改題庫制(兩層)、手機直向看一次解謎面板。
+  ★ 取捨(程式碼看不出為什麼,別改回去):
+    · 深題(≥4 步)允許最多 2 個正解首手(firstCount):不放寬時深 VCF 幾乎全被丟掉(1520 局面丟 53 個)
+    · 守備題只出「守方沒有反衝四」的局面:反衝四會讓「一手定勝負」變成多回合 tempo 戰
+    · 生成預算是「局數」不是「秒數」:秒數在不同機器會產生不同題庫(不可重現)
+    · 解謎採自由規則(無禁手),與 commitMove/checkWinFull 一致;解題器照同一規則證明
+  怎麼驗:npm run verify(約 20 秒,含逐題重證);瀏覽器冒煙 python -m http.server 8765 → node scripts/smoke-puzzles.mjs
+
+■ 2026-09-01 修好使用者回報的「落子對不到十字交叉線」。
   同一天三個回報其實是同一條 CSS 規則造成的:
     ① 落子時對不到十字交叉線
     ② 落子時會先往右下落子,再回到十字交叉線
@@ -109,9 +128,13 @@
   style.css           全部樣式;棋盤幾何在 .board-3d / .grid-line / .intersection / .stone
   script.js           遊戲主體(ES module);座標真相 = ratioAtIndex / CELL_RATIO /
                       MARGIN_RATIO / HOTSPOT_RATIO
-  game-rules.js       純函式規則(禁手、威脅分析)——唯一被單元測試覆蓋的檔
+  game-rules.js       純函式規則(禁手、威脅分析),對局 AI 用
+  puzzle-solver.js    殘局解題器(純函式):生成、測試、瀏覽器判定同一支
+  puzzles.js          殘局題庫 —— 自動產生,不要手改;改 scripts/gen-puzzles.mjs 再 npm run puzzles(約 12 分)
+  scripts/gen-puzzles.mjs   題庫生成器(自我對弈 → 證明 → 分級挑題);GEN_PROFILE=1 印分段計時
+  scripts/smoke-puzzles.mjs 解謎真瀏覽器冒煙(Playwright 借 Desktop/hfpc-sparks-hub 的;BASE= 可打線上)
   service-worker.js   PWA 快取(cache-first)
-  tests/              game-rules.test.mjs + static.test.mjs
+  tests/              game-rules / puzzle-solver / puzzles(逐題重證)/ static 四支
   CLAUDE.md           給 AI 的專案說明(先讀這份)
   roadmap.md          待做清單
 

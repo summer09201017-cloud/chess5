@@ -1,4 +1,6 @@
 import { analyzeForbiddenMove, analyzeMoveThreat } from "./game-rules.js";
+import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
+import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
 
 /* ============================================================
  * 3D 五子棋 — 全功能版
@@ -26,32 +28,9 @@ const PATTERN = {
   LIVE_THREE: 8000, THREE: 800, LIVE_TWO: 600, TWO: 60, ONE: 8,
 };
 
-const PUZZLES = [
-  { name:"白先三步殺 A", size:15, turn:"white", target:3,
-    hint:"白棋下出雙活四",
-    setup:[["black",7,7],["white",7,8],["black",8,8],["white",8,7],["black",6,6],["white",9,9],["black",6,7]] },
-  { name:"白先必勝（活四）", size:15, turn:"white", target:1,
-    hint:"找出可形成活四的關鍵點",
-    setup:[["white",7,7],["white",7,8],["white",7,9],["black",8,8],["black",6,6]] },
-  { name:"黑先一手致勝", size:9, turn:"black", target:1,
-    hint:"黑棋已有四連，請完成五連",
-    setup:[["black",4,2],["black",4,3],["black",4,4],["black",4,5],["white",3,3],["white",5,5],["white",2,2]] },
-  { name:"黑先制勝雙活三", size:13, turn:"black", target:1,
-    hint:"找出雙活三點",
-    setup:[["black",6,5],["black",6,6],["white",7,7],["black",5,6],["white",4,4],["white",8,8]] },
-  { name:"白防守要點", size:15, turn:"white", target:1,
-    hint:"擋住黑棋的活四",
-    setup:[["black",7,5],["black",7,6],["black",7,7],["black",7,8],["white",8,8],["white",6,6]] },
-  { name:"黑必勝活四", size:15, turn:"black", target:1,
-    hint:"形成兩端皆活的四連",
-    setup:[["black",8,7],["black",8,8],["black",8,9],["white",9,9],["white",7,7],["white",6,6]] },
-  { name:"白先反擊", size:15, turn:"white", target:1,
-    hint:"白棋下哪裡能反包圍黑棋",
-    setup:[["black",7,7],["black",8,8],["white",6,6],["white",9,9],["black",7,8],["white",8,7]] },
-  { name:"黑必殺三步", size:15, turn:"black", target:3,
-    hint:"連續攻擊不給白棋喘息",
-    setup:[["black",7,7],["white",8,8],["black",6,7],["white",9,9],["black",7,6],["white",8,9]] },
-];
+/* 殘局題庫在 puzzles.js(scripts/gen-puzzles.mjs 產生、每題經 puzzle-solver.js 證明、tests/puzzles.test.mjs 每次重證)。
+   2026-09-02 之前這裡手擺了 8 題:「剩 N 步」從不遞減、對手用會犯錯的 hard 檔、答錯不判負,
+   實際上只是「從一個局面開始跟電腦下」——使用者原話「只有 8 題,太少題目,又太簡單」。 */
 
 const ACHIEVEMENTS = [
   { id:"first_win", name:"初出茅蘆", desc:"贏得第一場勝利", icon:"🏆" },
@@ -59,6 +38,8 @@ const ACHIEVEMENTS = [
   { id:"streak5", name:"連勝五場", desc:"連續勝利 5 場", icon:"🔥" },
   { id:"beat_master", name:"挑戰大師", desc:"擊敗大師難度 AI", icon:"👑" },
   { id:"puzzle_solved", name:"解謎啟程", desc:"完成第一個解謎", icon:"🧩" },
+  { id:"puzzle_10", name:"解謎達人", desc:"解出 10 道殘局", icon:"🧠" },
+  { id:"puzzle_master", name:"殘局宗師", desc:"解完所有大師級殘局", icon:"🏯" },
   { id:"all_boards", name:"環遊棋盤", desc:"在四種尺寸都下過棋", icon:"🌐" },
   { id:"daily_gold", name:"每日金牌", desc:"每日挑戰獲得金牌", icon:"🥇" },
   { id:"online_match", name:"線上對手", desc:"完成第一場線上對戰", icon:"🌍" },
@@ -89,6 +70,9 @@ let activeTimerColor = "black";
 let lastMoveCell = null;
 let winningCells = [];
 let currentPuzzle = null;
+let puzzleRun = null;          // 進行中的一題:{ idx, movesLeft, attempts, hintUsed, moved, result, demo }
+let puzzleBest = {};           // 題目 id → 最佳星數(localStorage gomoku.puzzles)
+let puzzleLastIdx = 0;
 let dailySession = null;
 let onlinePeer = null;
 let onlineConn = null;
@@ -141,6 +125,7 @@ const whiteTimerValue = $("whiteTimerValue");
 /* ---------- 4. 初始化 ---------- */
 loadStats();
 loadPersistedSettings();
+loadPuzzleProgress();
 buildPuzzleList();
 populateAchievements();
 buildGrid();
@@ -153,6 +138,7 @@ startWeatherLoop();
 initPwa();
 maybeLoadFromUrl();
 updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
+bootstrapPuzzleMode();   // ?puzzle=<id> 深連結,或上次就是解謎模式 → 直接載題(否則會是空盤配「黑棋先手」)
 if (mode === "pve" && humanColor === "white") startAiTurn();
 
 /* ---------- 5. 棋盤建構 ---------- */
@@ -409,6 +395,11 @@ function checkWinFast(row, col, color) {
 /* ---------- 8. 悔棋 / 重做 / 提示 ---------- */
 function undoMove() {
   if (replayIndex !== null) return;
+  if (mode === "puzzle") {
+    // 解謎沒有悔棋(悔一步就能無限試錯,題目就沒意義了)—— 悔棋 = 整題重試,算一次嘗試
+    if (currentPuzzle != null) { bubble("解謎模式：悔棋 = 整題重試"); loadPuzzle(currentPuzzle, { retry: true }); }
+    return;
+  }
   if (moveHistory.length === 0 || aiThinking) return;
   // 在 PvE 一次回兩步（玩家+AI），其他模式回一步
   const steps = (mode === "pve" && moveHistory.length >= 2) ? 2 : 1;
@@ -438,7 +429,7 @@ function undoMove() {
 }
 
 function redoMove() {
-  if (replayIndex !== null) return;
+  if (replayIndex !== null || mode === "puzzle") return;
   if (redoStack.length === 0 || aiThinking) return;
   const m = redoStack.pop();
   commitMove(m.row, m.col, m.color);
@@ -460,6 +451,7 @@ function hintKey() {
 }
 
 function showHint() {
+  if (mode === "puzzle") return puzzleShowHint();   // 解謎的提示要用解題器的正解,不是對局 AI 的建議
   if (gameOver || aiThinking) return;
 
   const key = hintKey();
@@ -815,7 +807,8 @@ function resetGame(opts = {}) {
   } else if (mode === "online") {
     updateStatus(currentPlayer === onlineColor ? "輪到你（黑棋）" : "等待對手（黑棋）");
   } else if (mode === "puzzle") {
-    if (currentPuzzle) loadPuzzle(currentPuzzle);
+    // 舊版寫 if (currentPuzzle):第 0 題是 falsy,「重新開始」會把第 1 題清成空盤
+    if (currentPuzzle != null) loadPuzzle(currentPuzzle, { retry: true });
   } else if (mode === "daily") {
     startDailyChallenge();
   }
@@ -1104,58 +1097,308 @@ function refreshReplayUi() {
   $("replayPos").textContent = total ? `${cur}/${total}` : "--/--";
 }
 
-/* ---------- 19. 殘局解謎 ---------- */
+/* ---------- 19. 殘局解謎 ----------
+   題庫 = puzzles.js(scripts/gen-puzzles.mjs 產生;tests/puzzles.test.mjs 每次 npm test 逐題重證)。
+   判定 = puzzle-solver.js —— 與生成/測試同一支,瀏覽器端即時算「對手最頑強的防守」與「你還救不救得回來」。
+   一題的流程:
+     攻擊題(vcf / vct):你 = 先走方,剩 target 步。每一步後對手用 bestDefence 走最能撐的一手;
+       走錯(對手回應後,剩下步數內已無必勝)→ 立刻判失敗、盤面留著給你看、可重試;步數用完沒成五 → 失敗。
+     守備題(defend):你 = 守方,只有一手。走對(對手在 target+2 步內不再有連續衝四)→ 過;
+       走錯 → 對手把連殺演給你看(你仍可回應擋),結束後可重試。
+   星等:一次過且沒提示 ⭐⭐⭐ / 重試一次或用過提示 ⭐⭐ / 其餘 ⭐;只記最佳(localStorage gomoku.puzzles)。
+   ★ 這一節不放 module 層的 const:init 段在檔案前面就會呼叫 buildPuzzleList(),
+     這裡的 const 那時還在 TDZ(見檔頭「這些必須在 top-level 就 hoist 完成」那段註解)。 */
+function puzzleTitle(p) {
+  const who = p.turn === "black" ? "黑先" : "白先";
+  if (p.kind === "defend") return `${who}・守住 ${p.target} 步連殺`;
+  if (p.target === 1) return `${who}・一手成五`;
+  if (p.target === 2) return `${who}・做出活四／雙四`;
+  return `${who}・${p.target} 步${p.kind === "vcf" ? "連殺" : "必勝"}`;
+}
+function puzzleTask(p) {
+  const you = playerLabel(p.turn);
+  if (p.kind === "defend") return `對手下一手起有 ${p.target} 步連續衝四必勝。${you}${p.firstCount > 1 ? "只有兩個點" : "只有一個點"}擋得住——找出它（一手定勝負）。`;
+  if (p.target === 1) return `${you}已有四，找出成五的那一點。`;
+  if (p.kind === "vcf") return `${you}連續衝四、不給對手空手，${p.target} 步內成五（含最後一手）。對手會全力防守。`;
+  return `${you}用活三與衝四交錯進攻，${p.target} 步內成五。對手會反衝四，注意順序。`;
+}
+
+function loadPuzzleProgress() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("gomoku.puzzles") || "{}");
+    if (raw && raw.best && typeof raw.best === "object") puzzleBest = raw.best;
+    if (Number.isInteger(raw.last) && raw.last >= 0 && raw.last < PUZZLES.length) puzzleLastIdx = raw.last;
+  } catch { puzzleBest = {}; }
+}
+function savePuzzleProgress() {
+  try { localStorage.setItem("gomoku.puzzles", JSON.stringify({ best: puzzleBest, last: puzzleLastIdx })); } catch {}
+}
+function puzzleSolvedCount() { return PUZZLES.filter(p => puzzleBest[p.id]).length; }
+
 function buildPuzzleList() {
   const sel = $("puzzleSelect");
+  const keep = sel.value;
   sel.innerHTML = "";
-  PUZZLES.forEach((p, i) => {
-    const o = document.createElement("option");
-    o.value = i;
-    o.textContent = `${i + 1}. ${p.name}（${p.size}×${p.size}）`;
-    sel.appendChild(o);
-  });
+  for (const t of PUZZLE_TIERS) {
+    const inTier = PUZZLES.filter(p => p.tier === t.tier);
+    if (!inTier.length) continue;
+    const g = document.createElement("optgroup");
+    const done = inTier.filter(p => puzzleBest[p.id]).length;
+    g.label = `${t.name} ${t.stars}（${done}/${inTier.length}）`;
+    PUZZLES.forEach((p, i) => {
+      if (p.tier !== t.tier) return;
+      const o = document.createElement("option");
+      o.value = String(i);
+      const best = puzzleBest[p.id];
+      o.textContent = `${best ? "✅" : "▫"} ${i + 1}. ${puzzleTitle(p)}（${p.size}路）${best ? " " + "⭐".repeat(best) : ""}`;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  }
+  const want = keep !== "" ? keep : String(puzzleLastIdx);
+  sel.value = sel.querySelector(`option[value="${want}"]`) ? want : "0";
+  refreshPuzzleProgress();
 }
-function loadPuzzle(idx) {
-  currentPuzzle = idx;
+function refreshPuzzleProgress() {
+  const el = $("puzzleProgress");
+  if (!el) return;
+  const stars = Object.values(puzzleBest).reduce((a, b) => a + (Number(b) || 0), 0);
+  el.textContent = `已解 ${puzzleSolvedCount()}/${PUZZLES.length} 題・累計 ⭐ ${stars}`;
+}
+
+function loadPuzzle(idx, { retry = false } = {}) {
   const p = PUZZLES[idx];
   if (!p) return;
-  if (p.size !== BOARD_SIZE) {
-    BOARD_SIZE = p.size;
-    boardSizeSelect.value = String(p.size);
-    setBoardSize(p.size);
-  } else {
-    setBoardSize(p.size);
-  }
+  clearTimeout(aiTimer);
+  setAiThinking(false);
+  const prev = puzzleRun;
+  const sameAgain = retry && prev && prev.idx === idx;
+  currentPuzzle = idx;
+  puzzleLastIdx = idx;
+  savePuzzleProgress();
+  $("puzzleSelect").value = String(idx);
+  boardSizeSelect.value = String(p.size);
+  setBoardSize(p.size);                 // 清盤 + 重建交點
   for (const [color, r, c] of p.setup) {
     boardState[r][c] = color;
     placeStone(r, c, color, false);
   }
-  moveHistory = []; // 解謎不計入歷史
+  moveHistory = [];                     // 解謎不計入歷史(悔棋在解謎裡 = 重試)
+  redoStack = [];
+  replayIndex = null;
+  winningCells = [];
+  setLastMove(null, null);
   currentPlayer = p.turn;
   gameOver = false;
-  $("puzzleHint").textContent = `${p.hint}（剩 ${p.target} 步）`;
-  $("puzzleStars").textContent = "";
-  updateStatus(`解謎：${playerLabel(p.turn)} 先`);
+  puzzleRun = {
+    idx,
+    movesLeft: p.target,
+    attempts: sameAgain ? prev.attempts + (prev.moved ? 1 : 0) : 0,   // 還沒動就重來不算一次
+    hintUsed: sameAgain ? prev.hintUsed : false,
+    moved: false,
+    result: null,
+    demo: false,
+  };
+  const hintEl = $("puzzleHint");
+  hintEl.className = "hint";
+  hintEl.textContent = puzzleTask(p);
+  $("puzzleStars").textContent = puzzleBest[p.id] ? `最佳 ${"⭐".repeat(puzzleBest[p.id])}` : "";
+  refreshPuzzleStatus();
+  refreshReplayUi();
 }
+
+function refreshPuzzleStatus() {
+  const p = PUZZLES[currentPuzzle];
+  if (!p || !puzzleRun) return;
+  const t = PUZZLE_TIERS.find(x => x.tier === p.tier);
+  const head = `解謎 ${currentPuzzle + 1}/${PUZZLES.length}（${t ? t.name : ""}）`;
+  if (puzzleRun.result === "solved") updateStatus(`${head} ✅ 解出！`);
+  else if (puzzleRun.result === "failed") updateStatus(puzzleRun.demo && !gameOver ? `${head} ❌ 對手示範連殺中…` : `${head} ❌ 失敗，按「開始 / 重試」`);
+  else if (p.kind === "defend") updateStatus(`${head} ${playerLabel(p.turn)}守備・一手定勝負`);
+  else updateStatus(`${head} ${playerLabel(p.turn)}進攻・剩 ${puzzleRun.movesLeft} 步`);
+}
+
+function puzzleFallbackMove(color) {
+  // 你走了一手沒有威脅的棋,對手有空手:用對局引擎的評分挑最好的一步(決定性,不用會犯錯的難度檔)
+  const cands = generateCandidateMoves(2).filter(m => !boardState[m.row][m.col]);
+  let best = null, bestS = -Infinity;
+  for (const c of cands) {
+    const s = scoreMove(c.row, c.col, color);
+    if (s > bestS) { bestS = s; best = c; }
+  }
+  return best ? [best.row, best.col] : null;
+}
+
 function handlePuzzleMove(row, col) {
   const p = PUZZLES[currentPuzzle];
-  if (!p) return;
+  if (!p || !puzzleRun) return;
   if (boardState[row][col]) return;
-  if (!commitMove(row, col, currentPlayer)) return;
-  // 已勝
+  const you = p.turn;
+  if (currentPlayer !== you) return;
+  if (puzzleRun.result === "solved") return;
+  if (puzzleRun.result === "failed" && !puzzleRun.demo) return;   // 失敗後盤面留著看,要按重試
+  puzzleRun.moved = true;
+  if (!commitMove(row, col, you)) return;
+
+  if (p.kind === "defend") return handleDefendMove(p);
+
+  puzzleRun.movesLeft -= 1;
   if (gameOver) {
-    $("puzzleStars").textContent = "⭐⭐⭐";
-    $("puzzleHint").textContent = "✅ 完美解出！";
-    unlockAchievement("puzzle_solved");
+    if (winningCells.length) return puzzleFinish("solved");
+    return puzzleFinish("failed", "棋盤滿了。");
+  }
+  if (puzzleRun.movesLeft <= 0) {
+    return puzzleFinish("failed", `步數用完了：${p.target} 步內沒有成五。`);
+  }
+  refreshPuzzleStatus();
+
+  const foe = opp(you);
+  setAiThinking(true);
+  clearTimeout(aiTimer);
+  aiTimer = setTimeout(() => {
+    setAiThinking(false);
+    if (gameOver || mode !== "puzzle" || !puzzleRun || puzzleRun.idx !== currentPuzzle) return;
+    let reply = null;
+    try {
+      const d = puzzleBestDefence(boardState, BOARD_SIZE, you, puzzleRun.movesLeft, { budget: 60000 });
+      reply = d.move;
+    } catch (e) { console.warn("[puzzle] bestDefence 失敗", e); }
+    if (!reply) reply = puzzleFallbackMove(foe);
+    if (!reply) return puzzleFinish("failed", "沒有空位了。");
+    commitMove(reply[0], reply[1], foe);
+    if (gameOver) return puzzleFinish("failed", "對手先成五了。");
+    // 走錯的判定:對手回應後,剩下步數內已經沒有必勝 → 不必等步數用完
+    // (預算用完 aborted 就不判,寧可讓你走完;「不知道」不能當「無解」)
+    const chk = puzzleSolve(boardState, BOARD_SIZE, you, puzzleRun.movesLeft, { budget: 60000 });
+    if (chk.depth == null && !chk.aborted) {
+      return puzzleFinish("failed", `這一手不是最強。對手擋住後，剩 ${puzzleRun.movesLeft} 步已沒有必勝。`);
+    }
+    refreshPuzzleStatus();
+  }, 380);
+}
+
+function handleDefendMove(p) {
+  const foe = opp(p.turn);
+  if (puzzleRun.demo) {                 // 失敗示範中:你擋、對手繼續衝
+    if (!gameOver) scheduleDemoAttack(p);
     return;
   }
-  // 還沒勝 — 讓 AI 對手回應
-  setTimeout(() => {
-    if (gameOver) return;
-    const aiColor = currentPlayer; // 已切換
-    const move = chooseAiMove(AI_LEVELS.hard, aiColor);
-    if (move) commitMove(move.row, move.col, aiColor);
-  }, 350);
+  if (gameOver) return puzzleFinish("solved");   // 直接成五(題目設計上不會,保險)
+  // 對的守法 = 對手在 target+2 步內不再有連續衝四(與生成/測試同一個判準)
+  const res = puzzleSolve(boardState, BOARD_SIZE, foe, p.target + 2, { vcfOnly: true, budget: 80000 });
+  if (res.depth == null && !res.aborted) return puzzleFinish("solved");
+  puzzleFinish("failed", `沒擋住！看對手怎麼連續衝四（你可以跟著擋，看它擋不擋得完）。正解只有${p.firstCount > 1 ? "兩個點" : "一個點"}。`, { keepPlaying: true });
+  puzzleRun.demo = true;
+  scheduleDemoAttack(p);
+}
+function scheduleDemoAttack(p) {
+  const foe = opp(p.turn);
+  setAiThinking(true);
+  clearTimeout(aiTimer);
+  aiTimer = setTimeout(() => {
+    setAiThinking(false);
+    if (gameOver || mode !== "puzzle" || !puzzleRun || !puzzleRun.demo) return;
+    const res = puzzleSolve(boardState, BOARD_SIZE, foe, p.target + 4, { vcfOnly: true, budget: 80000 });
+    const m = res.move || puzzleFallbackMove(foe);
+    if (!m) return;
+    commitMove(m[0], m[1], foe);
+    if (gameOver) {
+      $("puzzleHint").textContent = `❌ 對手成五了。按「開始 / 重試」再想一次——正解只有${p.firstCount > 1 ? "兩個點" : "一個點"}。`;
+    }
+    refreshPuzzleStatus();
+  }, 420);
+}
+
+function puzzleFinish(result, msg, { keepPlaying = false } = {}) {
+  const p = PUZZLES[currentPuzzle];
+  if (!p || !puzzleRun) return;
+  clearTimeout(aiTimer);
+  setAiThinking(false);
+  puzzleRun.result = result;
+  const hintEl = $("puzzleHint");
+  if (result === "solved") {
+    const { attempts, hintUsed } = puzzleRun;
+    const stars = (attempts === 0 && !hintUsed) ? 3
+      : ((attempts === 0 && hintUsed) || (attempts === 1 && !hintUsed)) ? 2 : 1;
+    if (stars > (puzzleBest[p.id] || 0)) puzzleBest[p.id] = stars;
+    savePuzzleProgress();
+    buildPuzzleList();
+    $("puzzleStars").textContent = "⭐".repeat(stars) + "☆".repeat(3 - stars);
+    hintEl.className = "hint ok";
+    hintEl.textContent = `✅ 解出！${stars === 3 ? "一次過、沒用提示，滿星。" : stars === 2 ? "重試過一次或用了提示，兩星。" : "多次嘗試，一星。"} 按「下一題」繼續。`;
+    unlockAchievement("puzzle_solved");
+    if (puzzleSolvedCount() >= 10) unlockAchievement("puzzle_10");
+    const masters = PUZZLES.filter(q => q.tier === 4);
+    if (masters.length && masters.every(q => puzzleBest[q.id])) unlockAchievement("puzzle_master");
+    gameOver = true;
+  } else {
+    hintEl.className = "hint bad";
+    hintEl.textContent = `❌ ${msg || "失敗"}`;
+    $("puzzleStars").textContent = "";
+    if (!keepPlaying) gameOver = true;     // 鎖盤,留著看局面;重試才清
+  }
+  refreshPuzzleStatus();
+}
+
+function puzzleShowHint() {
+  const p = PUZZLES[currentPuzzle];
+  if (!p || !puzzleRun) { bubble("先選一題按「開始」"); return; }
+  if (puzzleRun.result === "solved") return;
+  if (puzzleRun.result === "failed") { bubble("先按「開始 / 重試」"); return; }
+  if (currentPlayer !== p.turn || aiThinking) return;
+  let m = null;
+  if (p.kind === "defend") {
+    m = moveHistory.length === 0 ? p.solution : null;
+  } else {
+    const res = puzzleSolve(boardState, BOARD_SIZE, p.turn, puzzleRun.movesLeft, { budget: 80000 });
+    m = res.move;
+  }
+  if (!m) { bubble("💡 這個局面已經沒有必勝手了，建議重試"); return; }
+  puzzleRun.hintUsed = true;
+  const el = pointRefs[m[0]][m[1]];
+  el.classList.add("hint-spot");
+  setTimeout(() => el.classList.remove("hint-spot"), 2200);
+  bubble(`💡 試試 ${coordLabel(m[0], m[1])}（用了提示，本題最多 ⭐⭐）`, 2800);
+}
+
+function nextPuzzle() {
+  if (!PUZZLES.length) return;
+  const start = currentPuzzle == null ? -1 : currentPuzzle;
+  for (let k = 1; k <= PUZZLES.length; k++) {      // 先找後面第一個還沒解的
+    const i = (start + k) % PUZZLES.length;
+    if (!puzzleBest[PUZZLES[i].id]) return loadPuzzle(i);
+  }
+  loadPuzzle((start + 1) % PUZZLES.length);        // 全解完了就單純下一題
+}
+
+function sharePuzzleLink() {
+  const idx = currentPuzzle ?? Number($("puzzleSelect").value || 0);
+  const p = PUZZLES[idx];
+  if (!p) return;
+  const url = `${location.origin}${location.pathname}?puzzle=${encodeURIComponent(p.id)}`;
+  const done = () => bubble(`🔗 已複製第 ${idx + 1} 題的連結`, 2600);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => bubble(url, 8000));
+  else bubble(url, 8000);
+}
+
+function enterPuzzleMode(idx) {
+  mode = "puzzle";
+  modeSelect.value = "puzzle";
+  document.body.dataset.mode = "puzzle";
+  loadPuzzle(idx);
+}
+
+/** 開機:網址 ?puzzle=<id> 直接開那一題(老師投影、全班同一題);否則上次是解謎模式就接著上次那題 */
+function bootstrapPuzzleMode() {
+  const id = new URLSearchParams(location.search).get("puzzle");
+  const idx = id ? PUZZLES.findIndex(p => p.id === id) : -1;
+  if (idx >= 0) {
+    enterPuzzleMode(idx);
+    const det = $("puzzleSelect").closest("details");
+    if (det) det.open = true;
+    return;
+  }
+  if (mode === "puzzle") loadPuzzle(Math.min(puzzleLastIdx, PUZZLES.length - 1));
 }
 
 /* ---------- 20. 每日挑戰 ---------- */
@@ -1533,10 +1776,21 @@ function attachEvents() {
 
   // 解謎
   $("puzzleStart").addEventListener("click", () => {
-    mode = "puzzle";
-    modeSelect.value = "puzzle";
-    document.body.dataset.mode = "puzzle";
-    loadPuzzle(Number($("puzzleSelect").value || 0));
+    const idx = Number($("puzzleSelect").value || 0);
+    if (mode !== "puzzle") { enterPuzzleMode(idx); saveSettings(); return; }
+    loadPuzzle(idx, { retry: currentPuzzle === idx });
+  });
+  $("puzzleNext").addEventListener("click", () => {
+    if (mode !== "puzzle") { enterPuzzleMode(Number($("puzzleSelect").value || 0)); saveSettings(); return; }
+    nextPuzzle();
+  });
+  $("puzzleHintBtn").addEventListener("click", () => {
+    if (mode !== "puzzle") { bubble("先按「開始」進入解謎"); return; }
+    puzzleShowHint();
+  });
+  $("puzzleShare").addEventListener("click", sharePuzzleLink);
+  $("puzzleSelect").addEventListener("change", () => {
+    if (mode === "puzzle") loadPuzzle(Number($("puzzleSelect").value || 0));
   });
 
   // 線上

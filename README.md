@@ -12,7 +12,9 @@
 - 黑棋禁手：長連、雙四、雙三
 - 計時、悔棋、重做、AI 提示
 - 棋譜匯入、匯出、分享連結與回放
-- 殘局解謎、每日挑戰、戰績與成就
+- 殘局解謎：67 題、四級（入門 16／進階 16／高手 20／大師 15），連續衝四、活三＋衝四、守備三種題型，
+  每題由解題器證明可解且步數精確；步數限制、最頑強防守、走錯立刻判負可重試、三級星等與進度、`?puzzle=<id>` 分享連結
+- 每日挑戰、戰績與成就
 - PWA 安裝支援，可加入手機主畫面
 
 ## 本機預覽
@@ -45,6 +47,25 @@ npm run verify
 - manifest、service worker、README、`.gitignore` 靜態檢查
 - 黑棋禁手規則：合法五連、長連、雙四、雙三
 - AI 評分使用的威脅分析分數
+- 殘局解題器（`tests/puzzle-solver.test.mjs`）：一手成五、活三兩步、四三三步、擋點判定、反衝四、預算用完誠實回報
+- 殘局題庫逐題重證（`tests/puzzles.test.mjs`）：每一題重新證明「target 步必勝且 target-1 步殺不了」、正解首手數、守備題唯一擋點
+
+### 殘局題庫怎麼重生
+
+`puzzles.js` 是 `scripts/gen-puzzles.mjs` 產生的，**不要手改**。要更多題或更難的題，改生成器裡的 `TIERS` 配額再：
+
+```bash
+npm run puzzles          # ≈ 12 分鐘；種子 + 局數決定結果，可重現
+npm test                 # 新題庫逐題重證
+```
+
+真瀏覽器冒煙（不在 `npm test` 裡，要借一份 Playwright）：
+
+```bash
+python -m http.server 8765 --bind 127.0.0.1
+node scripts/smoke-puzzles.mjs                        # 本機
+BASE=https://5-chess.pages.dev/ node scripts/smoke-puzzles.mjs   # 線上
+```
 
 ## 部署
 
@@ -88,5 +109,7 @@ Netlify 端的自動建置已停止。舊連結與已安裝的舊 PWA 靠這個�
 - `style.css`
 - `script.js`
 - `game-rules.js`
+- `puzzle-solver.js`（殘局解題器，生成／測試／瀏覽器共用）
+- `puzzles.js`（殘局題庫，自動產生）
 - `manifest.webmanifest`
 - `service-worker.js`

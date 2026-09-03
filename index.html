@@ -182,10 +182,16 @@
       <details>
         <summary>殘局解謎</summary>
         <div class="ctrl">
-          <select id="puzzleSelect"></select>
-          <button type="button" id="puzzleStart" class="ghost">開始挑戰</button>
-          <p id="puzzleHint" class="hint">選擇題目，找出致勝關鍵手。</p>
-          <div id="puzzleStars" class="stars"></div>
+          <p id="puzzleProgress" class="hint puzzle-progress">已解 0 題</p>
+          <select id="puzzleSelect" aria-label="選擇殘局題目"></select>
+          <div class="action-row puzzle-row">
+            <button type="button" id="puzzleStart" class="ghost">▶ 開始 / 重試</button>
+            <button type="button" id="puzzleNext" class="ghost">⏭ 下一題</button>
+            <button type="button" id="puzzleHintBtn" class="ghost" title="標出下一手正解（本題最多 ⭐⭐）">💡 提示</button>
+            <button type="button" id="puzzleShare" class="ghost mini" title="複製這一題的連結，老師投影、全班同一題">🔗</button>
+          </div>
+          <p id="puzzleHint" class="hint">選一題按「開始」。自由規則（五連即勝、無禁手），對手會全力防守；步數用完或走錯即失敗，可重試。</p>
+          <div id="puzzleStars" class="stars" aria-live="polite"></div>
         </div>
       </details>
 

@@ -11,7 +11,7 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-01)
+## 現況(2026-09-02)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
@@ -19,6 +19,13 @@
 - 黑棋禁手(長連/雙四/雙三)、計時、悔棋/重做、AI 提示、棋譜匯入匯出/分享/回放、戰績成就
 - PWA 可安裝、離線可玩
 - **2026-09-01 修好「落子對不到十字交叉線」**(見下面「本機地雷」第 1 條)
+- **2026-09-02 殘局解謎重做**(使用者原話「只有 8 題,太少題目,又太簡單」):
+  - 題庫 **67 題、四級**(入門 16・進階 16・高手 20・大師 15;黑先 34 / 白先 33),最深 7 步;由 `scripts/gen-puzzles.mjs` 自我對弈生成、
+    每題經 `puzzle-solver.js` 證明(N 步必勝且 N-1 步殺不了、正解首手數已記錄),`tests/puzzles.test.mjs` **每次 npm test 逐題重證**
+  - 玩法真的變成解謎:「剩 N 步」會遞減、對手走解題器算出的**最頑強防守**(不再借會犯錯的 hard 檔)、
+    走錯立刻判失敗(對手回應後剩下步數內已無必勝)、可重試;守備題答錯對手會把連殺演出來
+  - 三級星等只記最佳(`gomoku.puzzles`)、分級進度、`?puzzle=<id>` 深連結(老師投影全班同一題)、🔗 複製題目連結
+  - 舊版 8 題的病:「剩 N 步」從不遞減、對手 `AI_LEVELS.hard`、答錯不判負 ⇒ 其實只是「從一個局面跟電腦下」
 
 ### 待做
 見 `roadmap.md`。
@@ -30,9 +37,13 @@
 | `index.html` | 版面骨架、左側控制面板、`<dialog>`。**無內嵌 JS** |
 | `style.css` | 全部樣式。棋盤幾何在 `.board-3d` / `.grid-line` / `.intersection` / `.stone` |
 | `script.js` | 遊戲主體(ES module):建盤、落子、AI、計時、線上、PWA 註冊 |
-| `game-rules.js` | 純函式規則(禁手判定、威脅分析)——**唯一被單元測試覆蓋的檔** |
-| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump** |
-| `tests/` | `game-rules.test.mjs`(規則)+ `static.test.mjs`(靜態字串檢查) |
+| `game-rules.js` | 純函式規則(禁手判定、威脅分析),對局 AI 用 |
+| `puzzle-solver.js` | 殘局解題器(純函式、零 DOM):威脅空間搜尋 / VCF。生成、測試、瀏覽器端判定**同一支** |
+| `puzzles.js` | 殘局題庫(**自動產生,不要手改**;改 `scripts/gen-puzzles.mjs` 再 `npm run puzzles`) |
+| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js |
+| `scripts/gen-puzzles.mjs` | 題庫生成器:自我對弈 → 解題器證明 → 分級挑題 → 寫 puzzles.js(種子+局數決定,可重現) |
+| `scripts/smoke-puzzles.mjs` | 解謎流程真瀏覽器冒煙(Playwright,借 Desktop/hfpc-sparks-hub 的;不在 npm test 裡) |
+| `tests/` | `game-rules.test.mjs`(規則)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `static.test.mjs`(靜態字串) |
 
 棋盤座標的單一真相:`script.js` 的 `ratioAtIndex()` / `CELL_RATIO` / `MARGIN_RATIO` / `HOTSPOT_RATIO`。
 
@@ -55,6 +66,20 @@
 6. **部署清單的單一真相之源是 `scripts/stage.mjs`**,不要另外手抄一份要上傳哪些檔。
    它同時會檢查 `service-worker.js` 的 CORE_ASSETS 每一項都真的在 `.deploy/` 裡
    (少一個 → 安裝時 `cache.addAll` 整批失敗 → PWA 靜默地不再離線可玩)。
+7. **`puzzles.js` 不要手改。** 每題都由解題器證明過、`npm test` 每次重證;手擺的題目直覺錯誤率實測七成
+   (這輪我手算「活四怕反衝四」就是錯的,被解題器抓出來)。要更多/更難的題:改 `scripts/gen-puzzles.mjs` 的 `TIERS` 配額,
+   `npm run puzzles` 重生(約 12 分鐘;預算是**局數**不是秒數,才可重現)。改了 `puzzle-solver.js` 也要重跑測試——舊題可能不再成立。
+8. **`script.js` 第 19 節(解謎)不放 module 層 `const`。** 第 4 節 init 在檔案前面就會呼叫 `buildPuzzleList()`,
+   那時第 19 節的 `const` 還在 TDZ,整支模組會炸(同檔頭「這些必須在 top-level 就 hoist 完成」那條)。函式宣告可以,`const` 不行。
+9. **解謎的對手不准借 `AI_LEVELS.hard`**(會故意犯錯、帶隨機)—— 一律走 `puzzleBestDefence`;`tests/static.test.mjs` 釘死了。
+   每日挑戰(第 20 節)用 hard 是刻意的難度設計,不在此限。
+10. 解謎採**自由規則**(五連或以上即勝、無禁手),與 `commitMove → checkWinFull` 一致;禁手開關在解謎裡刻意不生效,
+    解題器也照這個規則證明。要改規則兩邊要一起改、題庫要重生。
+11. **這台機器(agape250,Node 24.13.0 Windows)呼叫 `fs.rmSync(x, {recursive:true})` 或 `fs.cpSync(dir, dst, {recursive:true})`
+    會讓 node 整個崩潰**(exit 0xC0000409,連刪不存在的目錄也崩、什麼都不印,shell 只看到 exit 127)。
+    `npm run stage` 因此靜默失敗、`.deploy/` 是舊的或缺 icons/、部署會把壞版推上去。
+    已改用 `fs/promises` 的 `rm` + 自己遞迴 `copyFileSync`;新腳本要刪/複製目錄一律照這個寫。
+    ★ 驗法:`node scripts/stage.mjs; echo $?` 一定要看到「✅ .deploy/ 已備妥」那行,只看 exit code 不夠(npm 會吃掉)。
 
 ## 部署
 

@@ -19,7 +19,24 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v11/);
+assert.match(serviceWorker, /gomoku-pwa-v12/);
+// 解謎題庫與解題器是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
+assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
+assert.match(serviceWorker, /"\.\/puzzles\.js"/);
+assert.match(script, /from "\.\/puzzles\.js"/);
+assert.match(script, /from "\.\/puzzle-solver\.js"/);
+// 解謎面板四顆鈕 + 進度行(2026-09-02 重做:步數限制、最強防守、答錯判負可重試、分級與進度)
+for (const id of ["puzzleSelect", "puzzleStart", "puzzleNext", "puzzleHintBtn", "puzzleShare", "puzzleProgress", "puzzleHint", "puzzleStars"]) {
+  assert.match(index, new RegExp(`id="${id}"`), `index.html 缺 #${id}`);
+}
+// 解謎不准借對局 AI 的難度檔當對手(hard 會故意犯錯、還帶隨機)—— 對手一律走解題器的最頑強防守。
+// 只看第 19 節:每日挑戰(第 20 節)的對手用 hard 是刻意的難度設計,不在此限。
+const puzzleSection = script.slice(script.indexOf("19. 殘局解謎"), script.indexOf("20. 每日挑戰"));
+assert.ok(puzzleSection.length > 1000, "找不到解謎那一節");
+assert.doesNotMatch(puzzleSection, /chooseAiMove\(/);
+assert.match(puzzleSection, /puzzleBestDefence\(boardState, BOARD_SIZE/);
+// 解謎模式的悔棋/重做不能變成無限試錯
+assert.match(script, /if \(replayIndex !== null \|\| mode === "puzzle"\) return;/);
 
 /* 💡 提示必須用 master 檔位,不可以用 hard。
    hard 是 { randomTop: 2, mistake: 0.03 } ⇒ 從前兩名隨機挑(按兩次會跳針)、

@@ -1,9 +1,13 @@
 # roadmap — 3D 五子棋(chess5)
 
-更新:2026-09-01
+更新:2026-09-02
 
 ## ✅ 已完成(別重做)
 
+- **2026-09-02 殘局解謎重做**(使用者:「只有 8 題,太少題目,又太簡單」):題庫 **67 題、四級**(入門 16・進階 16・高手 20・大師 15,最深 7 步),
+  由 `scripts/gen-puzzles.mjs` 自我對弈生成、`puzzle-solver.js` 逐題證明、`tests/puzzles.test.mjs` 每次重證;
+  步數限制真的會遞減、對手走最頑強防守、走錯立刻判負可重試、守備題答錯對手演示連殺、三級星等與進度、
+  `?puzzle=<id>` 深連結。SW bump 到 v12。真瀏覽器冒煙 `scripts/smoke-puzzles.mjs` 23 項全過。
 - 四種盤面(9/13/15/19)、AI 四難度、本機雙人、PeerJS 線上、殘局解謎、每日挑戰
 - 3D 視角(旋轉/俯仰/縮放/自動旋轉/四種預設視角)、四主題、五皮膚、四天氣
 - 黑棋禁手、計時、悔棋/重做、AI 提示、棋譜匯入匯出/分享連結/回放、戰績與成就
@@ -18,7 +22,10 @@
 
 | 項目 | ⏱ | ★ | 說明 |
 |---|---|---|---|
-| **在 GitHub 加兩個 secret** | 5 分 | ★★★ | `CLOUDFLARE_API_TOKEN`(權限 Account → Cloudflare Pages → Edit)與 `CLOUDFLARE_ACCOUNT_ID`。加完之後 push 就會自動部署到 pages.dev;**沒加之前 CI 是綠的、只跑驗證,得繼續用 `npm run deploy` 手動出版**。★ 只有使用者能做(金鑰不經 AI) |
+| 殘局題庫補滿大師級 | 30 分 | ★★ | 生成器配額裡「大師 守備 4 步」「進階 vct 2 步」「高手 守備 3 步」目前找不到或不足(見 puzzles.js 檔頭分佈)。方法:換種子或 `GEN_GAMES=1500` 多跑、或把 `savingMoves` 的 margin 從 2 放到 3 讓守備題更容易唯一。**不要手擺題** |
+| 每日挑戰改題庫制 | 60 分 | ★★ | 現在的每日挑戰只是「日期種子開局 + 跟 hard AI 下一局」。daily-puzzle-kit §十一 兩層:每日一組 3 題(日期種子從題庫抽、全世界同一組、全破才記一天)+ 練功房(現有解謎)。題庫與解題器都已就位,只差抽題與日曆存檔 |
+| 解謎手機直向版面 | 20 分 | ★ | 解謎面板多了四顆鈕與進度行,手機直向要實機看一次會不會擠(mobile-fullscreen-audit) |
+| ~~在 GitHub 加兩個 secret~~ | — | — | **0902 使用者拍板:不加,維持手動部署**(理由見 CLAUDE.md 部署段)。別再列成待辦問他 |
 | 一個月後刪掉 Netlify 站 | 5 分 | ★★ | 2026-10-01 之後。轉址掛滿一個月再刪(照 netlify-to-cloudflare-migrate 慣例)。還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4` |
 | SW 版號自動化 | 20 分 | ★★ | `CACHE_NAME` 與 `tests/static.test.mjs` 兩處硬編,要人記得同時改。改成測試只驗格式 `gomoku-pwa-v\d+`,再加一個 pre-push 檢查「殼層檔有動就必須 bump」 |
 | 對位迴歸測試 | 40 分 | ★★ | 把這次的 Playwright 量測(全盤交點 vs 格線、hover 三態)收成 `tests/alignment.mjs`,避免再有人用 transform 做定位而沒人發現 |

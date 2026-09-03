@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "node --check game-rules.js && node --check script.js && node --check service-worker.js && node --check tests/game-rules.test.mjs && node --check tests/static.test.mjs && node --check scripts/stage.mjs",
-    "test": "node tests/game-rules.test.mjs && node tests/static.test.mjs",
+    "lint": "node --check game-rules.js && node --check puzzle-solver.js && node --check puzzles.js && node --check script.js && node --check service-worker.js && node --check tests/game-rules.test.mjs && node --check tests/puzzle-solver.test.mjs && node --check tests/puzzles.test.mjs && node --check tests/static.test.mjs && node --check scripts/stage.mjs && node --check scripts/gen-puzzles.mjs",
+    "test": "node tests/game-rules.test.mjs && node tests/puzzle-solver.test.mjs && node tests/puzzles.test.mjs && node tests/static.test.mjs",
     "verify": "npm run lint && npm test",
+    "puzzles": "node scripts/gen-puzzles.mjs",
     "stage": "node scripts/stage.mjs",
     "deploy": "npm run verify && node scripts/stage.mjs && wrangler pages deploy .deploy --project-name=5-chess --branch=main --commit-dirty=true"
   }

@@ -196,6 +196,21 @@
       </details>
 
       <details>
+        <summary>每日挑戰</summary>
+        <div class="ctrl">
+          <p id="dailyLine" class="hint puzzle-progress">📅 每天一組 3 題</p>
+          <div class="action-row puzzle-row">
+            <button type="button" id="dailyStart" class="ghost">📅 今日挑戰</button>
+            <button type="button" id="dailyNext" class="ghost">⏭ 下一題</button>
+            <button type="button" id="dailyRetry" class="ghost">🔁 這題再來</button>
+            <button type="button" id="dailyHintBtn" class="ghost" title="標出下一手正解（本題最多 ⭐⭐）">💡 提示</button>
+          </div>
+          <p id="dailyHint" class="hint">每天一組 3 題（暖身→標準→挑戰），全世界同一組；三題全解才算破了今天，卡住可以先跳下一題。</p>
+          <div id="dailyStars" class="stars" aria-live="polite"></div>
+        </div>
+      </details>
+
+      <details>
         <summary>線上對戰</summary>
         <div class="ctrl">
           <button type="button" id="hostBtn" class="ghost">🏠 開房間</button>

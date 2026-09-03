@@ -26,6 +26,13 @@
     走錯立刻判失敗(對手回應後剩下步數內已無必勝)、可重試;守備題答錯對手會把連殺演出來
   - 三級星等只記最佳(`gomoku.puzzles`)、分級進度、`?puzzle=<id>` 深連結(老師投影全班同一題)、🔗 複製題目連結
   - 舊版 8 題的病:「剩 N 步」從不遞減、對手 `AI_LEVELS.hard`、答錯不判負 ⇒ 其實只是「從一個局面跟電腦下」
+- **2026-09-03 每日挑戰改題庫制 + 補題模式**:
+  - 每日挑戰 = 每天一組 3 題階梯(暖身→標準→挑戰),`daily-picker.js` 用本地日期 → FNV → 從題庫抽,**全世界同一組、零後端**;
+    解題流程完全共用解謎那一套,只差題目來源與進度(`gomoku.daily`,只留 60 天,**三題全破才算破了今天**、可跳題),
+    `?daily` 深連結;成就 🥇 每日金牌(三題全一次過)、📅 七日不斷。舊的「日期種子開局 + 跟 hard AI 下一局」已拆掉
+  - 題目 id 改成**內容雜湊**(`vcf3-a1b2c3`):重生或補題都不會讓玩家的「已解」跑到別題身上
+  - `npm run puzzles:more -- <seed>` 補題:保留現有每一題,只補配額還缺的桶;每次生成/補題記在 `PUZZLE_META.runs`
+  - 題庫現況 **75 題**(入門 16・進階 16・高手 23・大師 20;黑先 39 / 白先 36;最深 7 步;守備題高手 4・大師 4)
 
 ### 待做
 見 `roadmap.md`。
@@ -39,7 +46,8 @@
 | `script.js` | 遊戲主體(ES module):建盤、落子、AI、計時、線上、PWA 註冊 |
 | `game-rules.js` | 純函式規則(禁手判定、威脅分析),對局 AI 用 |
 | `puzzle-solver.js` | 殘局解題器(純函式、零 DOM):威脅空間搜尋 / VCF。生成、測試、瀏覽器端判定**同一支** |
-| `puzzles.js` | 殘局題庫(**自動產生,不要手改**;改 `scripts/gen-puzzles.mjs` 再 `npm run puzzles`) |
+| `puzzles.js` | 殘局題庫(**自動產生,不要手改**;改 `scripts/gen-puzzles.mjs` 再 `npm run puzzles` / 補題 `npm run puzzles:more -- <seed>`)。含 `PUZZLE_META.runs` 生成歷史 |
+| `daily-picker.js` | 每日挑戰抽題(純函式):本地日期 → FNV → 三段階梯各抽一題,全世界同一組 |
 | `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js |
 | `scripts/gen-puzzles.mjs` | 題庫生成器:自我對弈 → 解題器證明 → 分級挑題 → 寫 puzzles.js(種子+局數決定,可重現) |
 | `scripts/smoke-puzzles.mjs` | 解謎流程真瀏覽器冒煙(Playwright,借 Desktop/hfpc-sparks-hub 的;不在 npm test 裡) |
@@ -80,6 +88,11 @@
     `npm run stage` 因此靜默失敗、`.deploy/` 是舊的或缺 icons/、部署會把壞版推上去。
     已改用 `fs/promises` 的 `rm` + 自己遞迴 `copyFileSync`;新腳本要刪/複製目錄一律照這個寫。
     ★ 驗法:`node scripts/stage.mjs; echo $?` 一定要看到「✅ .deploy/ 已備妥」那行,只看 exit code 不夠(npm 會吃掉)。
+12. **題目 id 是局面的內容雜湊,不是序號。** 玩家進度(`gomoku.puzzles` / `gomoku.daily`)都用 id 當鍵;
+    `tests/puzzles.test.mjs` 會重算雜湊比對。要加題用 `npm run puzzles:more -- <seed>`(保留現有、只補缺),
+    全部重生(`npm run puzzles`)也不會改變沒動過的題的 id。**不要手改 setup、不要手編 id。**
+13. **每日挑戰與解謎共用第 19 節的流程**,分歧只在 `mode === "daily"` 幾個點(`puzzleEls()` 寫到哪個面板、
+    `dailyState` 決定題目、`recordDailySolve` 記進度)。要改解題流程改第 19 節一處就好;不要為每日另寫一套。
 
 ## 部署
 

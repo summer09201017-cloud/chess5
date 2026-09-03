@@ -1,6 +1,7 @@
 import { analyzeForbiddenMove, analyzeMoveThreat } from "./game-rules.js";
 import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
 import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
+import { pickDailySet, dailyKey, shiftKey, DAILY_KEEP_DAYS } from "./daily-picker.js";
 
 /* ============================================================
  * 3D 五子棋 — 全功能版
@@ -41,7 +42,8 @@ const ACHIEVEMENTS = [
   { id:"puzzle_10", name:"解謎達人", desc:"解出 10 道殘局", icon:"🧠" },
   { id:"puzzle_master", name:"殘局宗師", desc:"解完所有大師級殘局", icon:"🏯" },
   { id:"all_boards", name:"環遊棋盤", desc:"在四種尺寸都下過棋", icon:"🌐" },
-  { id:"daily_gold", name:"每日金牌", desc:"每日挑戰獲得金牌", icon:"🥇" },
+  { id:"daily_gold", name:"每日金牌", desc:"每日挑戰三題全破、全部一次過", icon:"🥇" },
+  { id:"daily_streak7", name:"七日不斷", desc:"連續 7 天破完每日挑戰", icon:"📅" },
   { id:"online_match", name:"線上對手", desc:"完成第一場線上對戰", icon:"🌍" },
 ];
 
@@ -73,7 +75,8 @@ let currentPuzzle = null;
 let puzzleRun = null;          // 進行中的一題:{ idx, movesLeft, attempts, hintUsed, moved, result, demo }
 let puzzleBest = {};           // 題目 id → 最佳星數(localStorage gomoku.puzzles)
 let puzzleLastIdx = 0;
-let dailySession = null;
+let dailyState = null;         // 今天這一組:{ key, set:[{index,id,label}], pos }
+let dailyLog = { days: {} };   // localStorage gomoku.daily:{ days: { "YYYY-MM-DD": { solved: { id: stars }, clear: bool } } },只留 60 天
 let onlinePeer = null;
 let onlineConn = null;
 let onlineColor = null;
@@ -223,10 +226,9 @@ function onPointClick(event) {
   const row = Number(p.dataset.row);
   const col = Number(p.dataset.col);
 
-  if (mode === "puzzle") return handlePuzzleMove(row, col);
+  if (isPuzzleMode()) return handlePuzzleMove(row, col);   // 殘局解謎 + 每日挑戰(每日 = 從題庫抽三題,同一套流程)
   if (mode === "online") return handleOnlineHumanMove(row, col);
   if (mode === "pvp") return playMoveLocal(row, col, currentPlayer);
-  if (mode === "daily") return handleDailyHumanMove(row, col);
 
   // pve
   if (humanColor === "random") humanColor = currentPlayer; // 保險：若殘留 "random" 立即解析
@@ -298,7 +300,7 @@ function commitMove(row, col, color) {
   } else if (mode === "online") {
     updateStatus(currentPlayer === onlineColor ? "輪到你" : "等待對手...");
   }
-  if (perMoveSeconds > 0) restartTurnTimer(currentPlayer);
+  if (perMoveSeconds > 0 && !isPuzzleMode()) restartTurnTimer(currentPlayer);   // 解謎/每日不計時
   saveOngoing();
   return true;
 }
@@ -355,10 +357,6 @@ function finalizeGame(winnerColor) {
     if (winnerColor === "black") stats.black += 1;
     else if (winnerColor === "white") stats.white += 1;
     else stats.draw += 1;
-  } else if (mode === "daily" && winnerColor === humanColor) {
-    const score = moveHistory.length <= 18 ? "gold" : moveHistory.length <= 28 ? "silver" : "bronze";
-    if (score === "gold") unlockAchievement("daily_gold");
-    bubble(`每日挑戰：${score === "gold" ? "🥇 金牌" : score === "silver" ? "🥈 銀牌" : "🥉 銅牌"}`);
   } else if (mode === "online") {
     unlockAchievement("online_match");
   }
@@ -395,7 +393,7 @@ function checkWinFast(row, col, color) {
 /* ---------- 8. 悔棋 / 重做 / 提示 ---------- */
 function undoMove() {
   if (replayIndex !== null) return;
-  if (mode === "puzzle") {
+  if (isPuzzleMode()) {
     // 解謎沒有悔棋(悔一步就能無限試錯,題目就沒意義了)—— 悔棋 = 整題重試,算一次嘗試
     if (currentPuzzle != null) { bubble("解謎模式：悔棋 = 整題重試"); loadPuzzle(currentPuzzle, { retry: true }); }
     return;
@@ -429,7 +427,7 @@ function undoMove() {
 }
 
 function redoMove() {
-  if (replayIndex !== null || mode === "puzzle") return;
+  if (replayIndex !== null || isPuzzleMode()) return;
   if (redoStack.length === 0 || aiThinking) return;
   const m = redoStack.pop();
   commitMove(m.row, m.col, m.color);
@@ -451,7 +449,7 @@ function hintKey() {
 }
 
 function showHint() {
-  if (mode === "puzzle") return puzzleShowHint();   // 解謎的提示要用解題器的正解,不是對局 AI 的建議
+  if (isPuzzleMode()) return puzzleShowHint();   // 解謎/每日的提示要用解題器的正解,不是對局 AI 的建議
   if (gameOver || aiThinking) return;
 
   const key = hintKey();
@@ -812,7 +810,7 @@ function resetGame(opts = {}) {
   } else if (mode === "daily") {
     startDailyChallenge();
   }
-  if (perMoveSeconds > 0) startTimer();
+  if (perMoveSeconds > 0 && !isPuzzleMode()) startTimer();
   saveOngoing();
   refreshReplayUi();
 }
@@ -980,7 +978,7 @@ function saveSettings() {
 }
 
 function saveOngoing() {
-  if (mode === "puzzle" || mode === "online") return;
+  if (isPuzzleMode() || mode === "online") return;   // 解謎/每日不進存檔:存檔是「重播棋譜」,自訂起手會重建出別的局面
   try {
     localStorage.setItem("gomoku.session", JSON.stringify({
       size: BOARD_SIZE, mode, humanColor, history: moveHistory, gameOver,
@@ -1174,9 +1172,11 @@ function loadPuzzle(idx, { retry = false } = {}) {
   const prev = puzzleRun;
   const sameAgain = retry && prev && prev.idx === idx;
   currentPuzzle = idx;
-  puzzleLastIdx = idx;
-  savePuzzleProgress();
-  $("puzzleSelect").value = String(idx);
+  if (mode !== "daily") {            // 每日模式不動練功房的「上次那題」與下拉選單
+    puzzleLastIdx = idx;
+    savePuzzleProgress();
+    $("puzzleSelect").value = String(idx);
+  }
   boardSizeSelect.value = String(p.size);
   setBoardSize(p.size);                 // 清盤 + 重建交點
   for (const [color, r, c] of p.setup) {
@@ -1199,19 +1199,31 @@ function loadPuzzle(idx, { retry = false } = {}) {
     result: null,
     demo: false,
   };
-  const hintEl = $("puzzleHint");
-  hintEl.className = "hint";
-  hintEl.textContent = puzzleTask(p);
-  $("puzzleStars").textContent = puzzleBest[p.id] ? `最佳 ${"⭐".repeat(puzzleBest[p.id])}` : "";
+  const els = puzzleEls();
+  els.hint.className = "hint";
+  els.hint.textContent = puzzleTask(p);
+  const best = mode === "daily" ? (dailyToday().solved[p.id] || 0) : (puzzleBest[p.id] || 0);
+  els.stars.textContent = best ? `最佳 ${"⭐".repeat(best)}` : "";
   refreshPuzzleStatus();
+  refreshDailyLine();
   refreshReplayUi();
 }
+
+/** 解謎與每日各有自己的一組文字元素(兩個面板);流程共用,只差寫到哪裡 */
+function puzzleEls() {
+  return mode === "daily"
+    ? { hint: $("dailyHint"), stars: $("dailyStars") }
+    : { hint: $("puzzleHint"), stars: $("puzzleStars") };
+}
+function isPuzzleMode() { return mode === "puzzle" || mode === "daily"; }
 
 function refreshPuzzleStatus() {
   const p = PUZZLES[currentPuzzle];
   if (!p || !puzzleRun) return;
   const t = PUZZLE_TIERS.find(x => x.tier === p.tier);
-  const head = `解謎 ${currentPuzzle + 1}/${PUZZLES.length}（${t ? t.name : ""}）`;
+  const head = (mode === "daily" && dailyState)
+    ? `📅 每日 第 ${dailyState.pos + 1}/${dailyState.set.length}「${dailyState.set[dailyState.pos].label}」`
+    : `解謎 ${currentPuzzle + 1}/${PUZZLES.length}（${t ? t.name : ""}）`;
   if (puzzleRun.result === "solved") updateStatus(`${head} ✅ 解出！`);
   else if (puzzleRun.result === "failed") updateStatus(puzzleRun.demo && !gameOver ? `${head} ❌ 對手示範連殺中…` : `${head} ❌ 失敗，按「開始 / 重試」`);
   else if (p.kind === "defend") updateStatus(`${head} ${playerLabel(p.turn)}守備・一手定勝負`);
@@ -1257,7 +1269,7 @@ function handlePuzzleMove(row, col) {
   clearTimeout(aiTimer);
   aiTimer = setTimeout(() => {
     setAiThinking(false);
-    if (gameOver || mode !== "puzzle" || !puzzleRun || puzzleRun.idx !== currentPuzzle) return;
+    if (gameOver || !isPuzzleMode() || !puzzleRun || puzzleRun.idx !== currentPuzzle) return;
     let reply = null;
     try {
       const d = puzzleBestDefence(boardState, BOARD_SIZE, you, puzzleRun.movesLeft, { budget: 60000 });
@@ -1297,13 +1309,13 @@ function scheduleDemoAttack(p) {
   clearTimeout(aiTimer);
   aiTimer = setTimeout(() => {
     setAiThinking(false);
-    if (gameOver || mode !== "puzzle" || !puzzleRun || !puzzleRun.demo) return;
+    if (gameOver || !isPuzzleMode() || !puzzleRun || !puzzleRun.demo) return;
     const res = puzzleSolve(boardState, BOARD_SIZE, foe, p.target + 4, { vcfOnly: true, budget: 80000 });
     const m = res.move || puzzleFallbackMove(foe);
     if (!m) return;
     commitMove(m[0], m[1], foe);
     if (gameOver) {
-      $("puzzleHint").textContent = `❌ 對手成五了。按「開始 / 重試」再想一次——正解只有${p.firstCount > 1 ? "兩個點" : "一個點"}。`;
+      puzzleEls().hint.textContent = `❌ 對手成五了。按「${mode === "daily" ? "這題再來" : "開始 / 重試"}」再想一次——正解只有${p.firstCount > 1 ? "兩個點" : "一個點"}。`;
     }
     refreshPuzzleStatus();
   }, 420);
@@ -1315,26 +1327,27 @@ function puzzleFinish(result, msg, { keepPlaying = false } = {}) {
   clearTimeout(aiTimer);
   setAiThinking(false);
   puzzleRun.result = result;
-  const hintEl = $("puzzleHint");
+  const { hint: hintEl, stars: starsEl } = puzzleEls();
   if (result === "solved") {
     const { attempts, hintUsed } = puzzleRun;
     const stars = (attempts === 0 && !hintUsed) ? 3
       : ((attempts === 0 && hintUsed) || (attempts === 1 && !hintUsed)) ? 2 : 1;
-    if (stars > (puzzleBest[p.id] || 0)) puzzleBest[p.id] = stars;
+    if (stars > (puzzleBest[p.id] || 0)) puzzleBest[p.id] = stars;   // 練功房的「最佳」也記(同一題)
     savePuzzleProgress();
     buildPuzzleList();
-    $("puzzleStars").textContent = "⭐".repeat(stars) + "☆".repeat(3 - stars);
+    starsEl.textContent = "⭐".repeat(stars) + "☆".repeat(3 - stars);
     hintEl.className = "hint ok";
     hintEl.textContent = `✅ 解出！${stars === 3 ? "一次過、沒用提示，滿星。" : stars === 2 ? "重試過一次或用了提示，兩星。" : "多次嘗試，一星。"} 按「下一題」繼續。`;
     unlockAchievement("puzzle_solved");
     if (puzzleSolvedCount() >= 10) unlockAchievement("puzzle_10");
     const masters = PUZZLES.filter(q => q.tier === 4);
     if (masters.length && masters.every(q => puzzleBest[q.id])) unlockAchievement("puzzle_master");
+    if (mode === "daily") recordDailySolve(p, stars);
     gameOver = true;
   } else {
     hintEl.className = "hint bad";
     hintEl.textContent = `❌ ${msg || "失敗"}`;
-    $("puzzleStars").textContent = "";
+    starsEl.textContent = "";
     if (!keepPlaying) gameOver = true;     // 鎖盤,留著看局面;重試才清
   }
   refreshPuzzleStatus();
@@ -1362,6 +1375,7 @@ function puzzleShowHint() {
 }
 
 function nextPuzzle() {
+  if (mode === "daily") return dailyNext();
   if (!PUZZLES.length) return;
   const start = currentPuzzle == null ? -1 : currentPuzzle;
   for (let k = 1; k <= PUZZLES.length; k++) {      // 先找後面第一個還沒解的
@@ -1388,9 +1402,14 @@ function enterPuzzleMode(idx) {
   loadPuzzle(idx);
 }
 
-/** 開機:網址 ?puzzle=<id> 直接開那一題(老師投影、全班同一題);否則上次是解謎模式就接著上次那題 */
+/** 開機:網址 ?puzzle=<id> 直接開那一題(老師投影、全班同一題)、?daily 直接進今日挑戰;
+ *  否則上次是解謎/每日模式就接著載題(不然會是空盤配「黑棋先手」) */
 function bootstrapPuzzleMode() {
-  const id = new URLSearchParams(location.search).get("puzzle");
+  loadDailyLog();
+  refreshDailyLine();
+  const params = new URLSearchParams(location.search);
+  if (params.has("daily")) { enterDailyMode(); return; }
+  const id = params.get("puzzle");
   const idx = id ? PUZZLES.findIndex(p => p.id === id) : -1;
   if (idx >= 0) {
     enterPuzzleMode(idx);
@@ -1399,42 +1418,102 @@ function bootstrapPuzzleMode() {
     return;
   }
   if (mode === "puzzle") loadPuzzle(Math.min(puzzleLastIdx, PUZZLES.length - 1));
+  else if (mode === "daily") startDailyChallenge();
 }
 
-/* ---------- 20. 每日挑戰 ---------- */
-function dateSeed(date = new Date()) {
-  const d = `${date.getFullYear()}${date.getMonth()}${date.getDate()}`;
-  let h = 0;
-  for (let i = 0; i < d.length; i++) h = (h * 31 + d.charCodeAt(i)) >>> 0;
-  return h;
+/* ---------- 20. 每日挑戰(每天一組 3 題,從殘局題庫抽) ----------
+   daily-puzzle-kit §十一「兩層」:📅 每日一組(儀式:全世界同一組、全破才記一天)+ 🧩 練功房(第 19 節,無限)。
+   今天這一組由 daily-picker.js 決定(本地日期 → FNV → 三段階梯各抽一題),沒有後端。
+   解題流程完全共用第 19 節(handlePuzzleMove / puzzleFinish…),只差:題目來自 dailyState.set、
+   結果記進 gomoku.daily(只留 60 天)、文字寫到 #dailyHint / #dailyStars / #dailyLine。
+   2026-09-03 之前的每日挑戰是「日期種子開局 + 跟 hard AI 下一局、步數金銀銅」—— 那不是題,已拆掉。 */
+function loadDailyLog() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("gomoku.daily") || "{}");
+    if (raw && raw.days && typeof raw.days === "object") dailyLog = { days: raw.days };
+  } catch { dailyLog = { days: {} }; }
 }
-function seededRandom(seed) {
-  let s = seed >>> 0;
-  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xFFFFFFFF; };
+function saveDailyLog() {
+  const keys = Object.keys(dailyLog.days).sort();
+  while (keys.length > DAILY_KEEP_DAYS) delete dailyLog.days[keys.shift()];
+  try { localStorage.setItem("gomoku.daily", JSON.stringify(dailyLog)); } catch {}
 }
+function dailyToday() {
+  const key = dailyState ? dailyState.key : dailyKey();
+  return dailyLog.days[key] || (dailyLog.days[key] = { solved: {}, clear: false });
+}
+function dailySolvedCount() {
+  if (!dailyState) return 0;
+  const d = dailyLog.days[dailyState.key];
+  return d ? dailyState.set.filter(s => d.solved[s.id]).length : 0;
+}
+/** 連續全破天數:今天破了從今天數,今天還沒破就從昨天往前數(今天還有機會接上) */
+function dailyStreak() {
+  let key = dailyKey();
+  if (!(dailyLog.days[key] && dailyLog.days[key].clear)) key = shiftKey(key, -1);
+  let n = 0;
+  while (dailyLog.days[key] && dailyLog.days[key].clear) { n++; key = shiftKey(key, -1); }
+  return n;
+}
+function refreshDailyLine() {
+  const el = $("dailyLine");
+  if (!el) return;
+  const key = dailyKey();
+  const set = dailyState && dailyState.key === key ? dailyState.set : pickDailySet(PUZZLES, key);
+  const d = dailyLog.days[key];
+  const k = d ? set.filter(s => d.solved[s.id]).length : 0;
+  const streak = dailyStreak();
+  el.textContent = `📅 ${key}・今天已解 ${k}/${set.length}${d && d.clear ? "・今天破了 🎉" : ""}${streak ? `・連續 ${streak} 天` : ""}`;
+}
+
 function startDailyChallenge() {
-  setBoardSize(15);
-  const seed = dateSeed();
-  const rnd = seededRandom(seed);
-  // AI 先手隨機一個小範圍開局
-  const c = Math.floor(BOARD_SIZE / 2);
-  const dr = Math.floor(rnd() * 3) - 1;
-  const dc = Math.floor(rnd() * 3) - 1;
-  commitMove(c + dr, c + dc, "white");
-  humanColor = "black";
-  currentPlayer = "black";
-  updateStatus(`每日挑戰（黑棋你）— ${new Date().toLocaleDateString()}`);
-  bubble(`今日挑戰開始 🌅`);
+  const key = dailyKey();
+  dailyState = { key, set: pickDailySet(PUZZLES, key), pos: 0 };
+  if (!dailyState.set.length) { updateStatus("題庫是空的"); return; }
+  const today = dailyToday();
+  const firstOpen = dailyState.set.findIndex(s => !today.solved[s.id]);
+  dailyState.pos = firstOpen >= 0 ? firstOpen : 0;
+  loadPuzzle(dailyState.set[dailyState.pos].index);
+  if (firstOpen < 0) bubble("今天三題都破了 🎉 明天有新的一組", 3000);
 }
-function handleDailyHumanMove(row, col) {
-  if (currentPlayer !== humanColor) return;
-  if (!commitMove(row, col, humanColor)) return;
-  if (gameOver) return;
-  setTimeout(() => {
-    if (gameOver) return;
-    const move = chooseAiMove(AI_LEVELS.hard, "white");
-    if (move) commitMove(move.row, move.col, "white");
-  }, 350);
+function dailyNext() {
+  if (!dailyState) return startDailyChallenge();
+  const today = dailyToday();
+  const n = dailyState.set.length;
+  for (let k = 1; k <= n; k++) {          // 先找下一個還沒解的(跳過不算破,可以回來)
+    const i = (dailyState.pos + k) % n;
+    if (!today.solved[dailyState.set[i].id]) { dailyState.pos = i; return loadPuzzle(dailyState.set[i].index); }
+  }
+  bubble("今天三題都破了 🎉 明天有新的一組", 3000);
+  dailyState.pos = (dailyState.pos + 1) % n;
+  loadPuzzle(dailyState.set[dailyState.pos].index);
+}
+function dailyRetry() {
+  if (!dailyState) return startDailyChallenge();
+  loadPuzzle(dailyState.set[dailyState.pos].index, { retry: true });
+}
+/** 只有贏才記、同一題一天只記最佳;三題全破 → clear(streak 只看 clear) */
+function recordDailySolve(p, stars) {
+  if (!dailyState) return;
+  const today = dailyToday();
+  if (stars > (today.solved[p.id] || 0)) today.solved[p.id] = stars;
+  const allDone = dailyState.set.every(s => today.solved[s.id]);
+  if (allDone && !today.clear) {
+    today.clear = true;
+    bubble("🎉 今天三題全破！明天有新的一組", 3200);
+    if (dailyState.set.every(s => today.solved[s.id] === 3)) unlockAchievement("daily_gold");
+  }
+  saveDailyLog();
+  if (dailyStreak() >= 7) unlockAchievement("daily_streak7");
+  refreshDailyLine();
+}
+function enterDailyMode() {
+  mode = "daily";
+  modeSelect.value = "daily";
+  document.body.dataset.mode = "daily";
+  startDailyChallenge();
+  const det = $("dailyLine").closest("details");
+  if (det) det.open = true;
 }
 
 /* ---------- 21. 線上對戰 (PeerJS) ---------- */
@@ -1791,6 +1870,15 @@ function attachEvents() {
   $("puzzleShare").addEventListener("click", sharePuzzleLink);
   $("puzzleSelect").addEventListener("change", () => {
     if (mode === "puzzle") loadPuzzle(Number($("puzzleSelect").value || 0));
+  });
+
+  // 每日挑戰
+  $("dailyStart").addEventListener("click", () => { enterDailyMode(); saveSettings(); });
+  $("dailyNext").addEventListener("click", () => { if (mode !== "daily") { enterDailyMode(); saveSettings(); return; } dailyNext(); });
+  $("dailyRetry").addEventListener("click", () => { if (mode !== "daily") { enterDailyMode(); saveSettings(); return; } dailyRetry(); });
+  $("dailyHintBtn").addEventListener("click", () => {
+    if (mode !== "daily") { bubble("先按「今日挑戰」"); return; }
+    puzzleShowHint();
   });
 
   // 線上

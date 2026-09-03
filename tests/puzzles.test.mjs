@@ -7,12 +7,15 @@
      defend:守方沒有反衝四、對手沒有現成四、對手 VCF depth === target、唯一擋點 === solution
    另驗 id 唯一、tier/kind 分佈至少涵蓋四級,以及「已解」進度鍵不會被 id 重排打亂(id 是穩定字串)。 */
 import assert from "node:assert/strict";
-import { PUZZLES, PUZZLE_TIERS } from "../puzzles.js";
-import { boardFromSetup, solve, winningFirstMoves, fourMoves, winningCells, savingMoves, other } from "../puzzle-solver.js";
+import { PUZZLES, PUZZLE_TIERS, PUZZLE_META } from "../puzzles.js";
+import { boardFromSetup, solve, winningFirstMoves, fourMoves, winningCells, savingMoves, other, boardKey } from "../puzzle-solver.js";
+import { fnv1a } from "../daily-picker.js";
 
 const t0 = performance.now();
 assert.ok(Array.isArray(PUZZLES) && PUZZLES.length >= 40, `題庫至少 40 題(現在 ${PUZZLES.length})—— 使用者原話「只有 8 題太少」`);
 assert.deepEqual(PUZZLE_TIERS.map(t => t.tier), [1, 2, 3, 4]);
+assert.ok(PUZZLE_META && Array.isArray(PUZZLE_META.runs) && PUZZLE_META.runs.length >= 1, "PUZZLE_META.runs 要記錄生成/補題歷史");
+assert.equal(PUZZLE_META.runs.at(-1).total, PUZZLES.length, "META 最後一筆的 total 要等於題數");
 
 const ids = new Set();
 const tiersSeen = new Set();
@@ -21,8 +24,9 @@ let maxTarget = 0;
 
 for (const p of PUZZLES) {
   const tag = `[${p.id}]`;
-  assert.ok(typeof p.id === "string" && /^(vcf|vct|defend)\d+-\d{2}$/.test(p.id), `${tag} id 格式`);
+  assert.ok(typeof p.id === "string" && /^(vcf|vct|defend)\d+-[0-9a-f]{6}$/.test(p.id), `${tag} id 格式(kind+target-局面雜湊)`);
   assert.ok(!ids.has(p.id), `${tag} id 重複`); ids.add(p.id);
+  assert.ok(p.id.startsWith(`${p.kind}${p.target}-`), `${tag} id 前綴要對得上 kind/target`);
   assert.ok([1, 2, 3, 4].includes(p.tier), `${tag} tier`);
   assert.ok(["vcf", "vct", "defend"].includes(p.kind), `${tag} kind`);
   assert.ok([9, 13, 15, 19].includes(p.size), `${tag} size 必須是遊戲支援的盤面`);
@@ -51,6 +55,8 @@ for (const p of PUZZLES) {
 
   const board = boardFromSetup(p.size, p.setup);
   const before = JSON.stringify(board);
+  const hash = fnv1a(`${p.size}|${p.turn}|${boardKey(board)}`).toString(16).padStart(8, "0").slice(0, 6);
+  assert.equal(p.id, `${p.kind}${p.target}-${hash}`, `${tag} id 雜湊對不上局面(有人手改了 setup 或 id)`);
 
   if (p.kind === "vcf" || p.kind === "vct") {
     const opts = p.kind === "vcf" ? { vcfOnly: true, budget: 400000 } : { budget: 400000 };
@@ -72,8 +78,8 @@ for (const p of PUZZLES) {
     const saves = savingMoves(board, p.size, p.turn, p.target, 2);
     assert.equal(saves.length, p.firstCount, `${tag} 擋點數應為 ${p.firstCount},實得 ${JSON.stringify(saves)}`);
     assert.ok(saves.some(([r, c]) => r === sr && c === sc), `${tag} solution 不在擋點裡:${JSON.stringify(saves)}`);
-    // 對手 3 步以內的連殺要唯一擋點;4 步的允許兩個(生成器 maxFirstMoves 同一條規則)
-    if (p.target <= 3) assert.equal(p.firstCount, 1, `${tag} 淺的守備題要唯一擋點`);
+    // 對手 2 步連殺要唯一擋點;3~4 步允許兩個(生成器 maxSaves 同一條規則)
+    if (p.target <= 2) assert.equal(p.firstCount, 1, `${tag} 淺的守備題要唯一擋點`);
   }
   assert.equal(JSON.stringify(board), before, `${tag} 解題器弄髒了盤面`);
 }

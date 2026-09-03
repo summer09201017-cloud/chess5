@@ -1,5 +1,5 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-02(殘局解謎重做)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-03(每日挑戰改題庫制 + 補題模式;前一日殘局解謎重做)
 ================================================================================
 
 ■ 這是什麼
@@ -13,7 +13,18 @@
                  還原點 deploy 6a96a4c9f62e310008e8a2a4)
   本機工作副本: C:\Users\agape250\Desktop\chess5
 
-■ ★ 現在到哪(2026-09-02:殘局解謎重做)
+■ ★ 現在到哪(2026-09-03:每日挑戰改題庫制 + 補題模式;使用者對前一輪「下一步建議」說「開工」)
+  已完成(npm run verify 全綠、smoke-puzzles.mjs 本機/線上 35 項全過):
+    · 每日挑戰 = 每天一組 3 題階梯(暖身→標準→挑戰),daily-picker.js 用本地日期 → FNV 從題庫抽,全世界同一組、零後端;
+      流程完全共用解謎第 19 節;進度 gomoku.daily(只留 60 天,三題全破才 clear、streak 只看 clear、可跳題);?daily 深連結;
+      成就 🥇 每日金牌(三題全一次過)、📅 七日不斷。舊的「日期種子開局 + 跟 hard AI 下一局」拆掉(static test 釘死不准復活)
+    · 題目 id 改內容雜湊(vcf3-a1b2c3):重生/補題都不會讓玩家的「已解」跑到別題身上;tests 會重算雜湊比對
+    · npm run puzzles:more -- <seed> 補題模式:保留現有每一題只補配額缺的桶;PUZZLE_META.runs 記每次生成/補題
+    · 題庫 75 題(入門 16・進階 16・高手 23・大師 20;黑先 39 / 白先 36;守備題高手 4・大師 4;最深 7 步)
+      = 首版 67 題 + 補題 seed 20260903、1500 局、VCT_SAMPLE=0 加 8 題;SW gomoku-pwa-v13(+daily-picker.js)
+  ★ 補題要多跑幾個種子才會滿(大師守備/進階 vct 很稀有):npm run puzzles:more -- 20260904 之類,每輪約 10 分鐘。
+
+■ ★ 2026-09-02:殘局解謎重做
   使用者原話:「殘局解謎,只有 8 題,太少題目,又太簡單」。
   病不只題少:舊版「剩 N 步」從不遞減、對手用會犯錯的 hard 檔、答錯不判負 ⇒ 其實是「從一個局面跟電腦下」。
 
@@ -130,7 +141,9 @@
                       MARGIN_RATIO / HOTSPOT_RATIO
   game-rules.js       純函式規則(禁手、威脅分析),對局 AI 用
   puzzle-solver.js    殘局解題器(純函式):生成、測試、瀏覽器判定同一支
-  puzzles.js          殘局題庫 —— 自動產生,不要手改;改 scripts/gen-puzzles.mjs 再 npm run puzzles(約 12 分)
+  puzzles.js          殘局題庫 —— 自動產生,不要手改;全部重生 npm run puzzles(約 12 分)、補題 npm run puzzles:more -- <seed>(約 10 分)
+                      id 是局面雜湊(玩家進度的鍵),PUZZLE_META.runs 是生成/補題歷史
+  daily-picker.js     每日挑戰抽題(純函式):本地日期 → FNV → 三段階梯各抽一題;tests/daily-picker.test.mjs 掃未來 400 天
   scripts/gen-puzzles.mjs   題庫生成器(自我對弈 → 證明 → 分級挑題);GEN_PROFILE=1 印分段計時
   scripts/smoke-puzzles.mjs 解謎真瀏覽器冒煙(Playwright 借 Desktop/hfpc-sparks-hub 的;BASE= 可打線上)
   service-worker.js   PWA 快取(cache-first)

@@ -25,6 +25,7 @@ const SITE_FILES = [
   "game-rules.js",
   "puzzle-solver.js",
   "puzzles.js",
+  "daily-picker.js",
   "manifest.webmanifest",
   "service-worker.js",
   "icons",

@@ -196,7 +196,49 @@ check(solvedOpt.startsWith("✅") && solvedOpt.includes("⭐⭐⭐"), `已解的
 st = await status();
 check(st.includes("解謎"), `重整後接續解謎模式:${st}`);
 
-/* ⑦ console */
+/* ⑧ 每日挑戰:今天三題階梯、解一題記一題、重整後還在、?daily 深連結、跳題不算破 */
+{
+  const { pickDailySet, dailyKey } = await import("../daily-picker.js");
+  const todayKey = dailyKey();
+  const set = pickDailySet(PUZZLES, todayKey);
+  await page.$eval("#dailyLine", el => { el.closest("details").open = true; });
+  await page.click("#dailyStart");
+  await sleep(200);
+  st = await status();
+  check(st.includes("📅 每日 第 1/3「暖身」"), `今日挑戰開題:${st}`);
+  check(await page.$eval("#modeSelect", el => el.value) === "daily", "模式切到 daily");
+  const p0 = PUZZLES[set[0].index];
+  const b0 = await readBoard(p0.size);
+  check(JSON.stringify(b0) === JSON.stringify(boardFromSetup(p0.size, p0.setup)), `第 1 題盤面 = 今天暖身題 ${set[0].id}`);
+  const line0 = await page.$eval("#dailyLine", el => el.textContent);
+  check(line0.includes(todayKey) && line0.includes("今天已解 0/3"), `每日進度行:${line0}`);
+  // 解掉暖身題
+  if (p0.kind === "defend") { await clickCell(p0.solution[0], p0.solution[1]); await sleep(300); st = await status(); }
+  else st = await playToWin(p0, set[0].index);
+  check(st.includes("✅"), `[${set[0].id}] 暖身題解出 → ${st}`);
+  const line1 = await page.$eval("#dailyLine", el => el.textContent);
+  check(line1.includes("今天已解 1/3"), `每日進度更新:${line1}`);
+  check((await page.$eval("#dailyStars", el => el.textContent)).startsWith("⭐"), "每日面板顯示星星");
+  // 下一題 → 標準;再下一題 → 挑戰(跳過不算破);再下一題 → 回到標準(暖身已解要跳過)
+  await page.click("#dailyNext"); await sleep(150);
+  check((await status()).includes("第 2/3「標準」"), `下一題 → ${await status()}`);
+  await page.click("#dailyNext"); await sleep(150);
+  check((await status()).includes("第 3/3「挑戰」"), `再下一題 → ${await status()}`);
+  await page.click("#dailyNext"); await sleep(150);
+  check((await status()).includes("第 2/3「標準」"), `繞回時跳過已解的暖身 → ${await status()}`);
+  // 重整:每日進度還在;?daily 深連結進每日模式
+  await page.goto(`${BASE}?daily`, { waitUntil: "load" });
+  await sleep(300);
+  st = await status();
+  check(st.includes("📅 每日") && st.includes("「標準」"), `?daily 深連結 → 從第一個未解的題接續:${st}`);
+  const line2 = await page.$eval("#dailyLine", el => el.textContent);
+  check(line2.includes("今天已解 1/3"), `重整後每日進度還在:${line2}`);
+  // 練功房的進度也記到同一題
+  const prog = await page.$eval("#puzzleProgress", el => el.textContent);
+  check(/已解 [1-9]\d*\/\d+ 題/.test(prog), `同一題也記進練功房:${prog}`);
+}
+
+/* ⑨ console */
 check(errors.length === 0, errors.length ? `console 有錯:\n    ${errors.join("\n    ")}` : "console 乾淨");
 
 await browser.close();

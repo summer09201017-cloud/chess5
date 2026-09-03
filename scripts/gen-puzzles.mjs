@@ -50,18 +50,20 @@ const TIERS = [
   { tier: 2, name: "進階", quota: [
     { kind: "vcf", depths: [3], want: 10, sizes: [13, 15] },
     { kind: "vct", depths: [2], want: 4, sizes: [13, 15] },
-    { kind: "defend", depths: [2], want: 6, sizes: [13, 15] },
+    { kind: "defend", depths: [2], want: 8, sizes: [13, 15] },
   ] },
   { tier: 3, name: "高手", quota: [
     { kind: "vcf", depths: [4], want: 8, sizes: [15] },
     { kind: "vcf", depths: [5], want: 6, sizes: [15] },
     { kind: "vct", depths: [3], want: 6, sizes: [15] },
-    { kind: "defend", depths: [3], want: 4, sizes: [15] },
+    { kind: "defend", depths: [3], want: 8, sizes: [15] },
   ] },
   { tier: 4, name: "大師", quota: [
     { kind: "vcf", depths: [6, 7, 8], want: 10, sizes: [15, 19] },
     { kind: "vct", depths: [4, 5], want: 6, sizes: [15, 19] },
-    { kind: "defend", depths: [4], want: 4, sizes: [15, 19] },
+    // 0903 使用者要「多幾題大師守備」:守備配額 4→8(2→8 / 3→8)。★ 只換種子不會多出題 ——
+    // 桶滿了 needKind 就不搜(實測 1500 局 4.5 秒、新增 0)。要更多題就是調這裡的 want。
+    { kind: "defend", depths: [4], want: 8, sizes: [15, 19] },
   ] },
 ];
 

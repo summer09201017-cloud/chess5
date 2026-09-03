@@ -11,7 +11,7 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-02)
+## 現況(2026-09-03)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
@@ -32,7 +32,8 @@
     `?daily` 深連結;成就 🥇 每日金牌(三題全一次過)、📅 七日不斷。舊的「日期種子開局 + 跟 hard AI 下一局」已拆掉
   - 題目 id 改成**內容雜湊**(`vcf3-a1b2c3`):重生或補題都不會讓玩家的「已解」跑到別題身上
   - `npm run puzzles:more -- <seed>` 補題:保留現有每一題,只補配額還缺的桶;每次生成/補題記在 `PUZZLE_META.runs`
-  - 題庫現況 **75 題**(入門 16・進階 16・高手 23・大師 20;黑先 39 / 白先 36;最深 7 步;守備題高手 4・大師 4)
+  - 題庫現況 **84 題**(入門 16・進階 18・高手 27・大師 23;黑先 43 / 白先 41;最深 7 步;守備題進階 8・高手 8・大師 7)
+  - **0903 交接場**:守備配額 6/4/4 → 8/8/8 後補題 +9;`gomoku.session` 那張卡與「加題不是換種子」見地雷 14/15
 
 ### 待做
 見 `roadmap.md`。
@@ -48,10 +49,10 @@
 | `puzzle-solver.js` | 殘局解題器(純函式、零 DOM):威脅空間搜尋 / VCF。生成、測試、瀏覽器端判定**同一支** |
 | `puzzles.js` | 殘局題庫(**自動產生,不要手改**;改 `scripts/gen-puzzles.mjs` 再 `npm run puzzles` / 補題 `npm run puzzles:more -- <seed>`)。含 `PUZZLE_META.runs` 生成歷史 |
 | `daily-picker.js` | 每日挑戰抽題(純函式):本地日期 → FNV → 三段階梯各抽一題,全世界同一組 |
-| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js |
+| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js / daily-picker.js |
 | `scripts/gen-puzzles.mjs` | 題庫生成器:自我對弈 → 解題器證明 → 分級挑題 → 寫 puzzles.js(種子+局數決定,可重現) |
 | `scripts/smoke-puzzles.mjs` | 解謎流程真瀏覽器冒煙(Playwright,借 Desktop/hfpc-sparks-hub 的;不在 npm test 裡) |
-| `tests/` | `game-rules.test.mjs`(規則)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `static.test.mjs`(靜態字串) |
+| `tests/` | `game-rules.test.mjs`(規則)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `daily-picker.test.mjs`(每日抽題掃 400 天)+ `static.test.mjs`(靜態字串) |
 
 棋盤座標的單一真相:`script.js` 的 `ratioAtIndex()` / `CELL_RATIO` / `MARGIN_RATIO` / `HOTSPOT_RATIO`。
 
@@ -93,6 +94,13 @@
     全部重生(`npm run puzzles`)也不會改變沒動過的題的 id。**不要手改 setup、不要手編 id。**
 13. **每日挑戰與解謎共用第 19 節的流程**,分歧只在 `mode === "daily"` 幾個點(`puzzleEls()` 寫到哪個面板、
     `dailyState` 決定題目、`recordDailySolve` 記進度)。要改解題流程改第 19 節一處就好;不要為每日另寫一套。
+14. **`localStorage` 四個鍵,其中一個是半套的**:`gomoku.stats`(戰績)/`gomoku.settings`(偏好)/
+    `gomoku.puzzles`(解謎進度)/`gomoku.daily`(每日日曆)都有寫也有讀;
+    **`gomoku.session`(對局進度)只有 `saveOngoing()` 在寫、開機沒有任何地方讀它** ⇒
+    關掉網頁再開,那盤棋不會回來,而存檔還在越寫越新。要動它之前看 roadmap 那張卡(使用者 0903 問過、尚未拍板)。
+    hook `localstorage-key-guard` 每次改 `script.js` 都會提醒這一條——**那不是誤報**。
+15. **加題不是換種子。** 生成器的桶滿了就不再搜那一類(`needKind`),所以配額滿的情況下
+    `npm run puzzles:more -- <新種子>` 會在幾秒內誠實回報「新增 0」。要更多題**先調 `TIERS` 的 `want`**。
 
 ## 部署
 

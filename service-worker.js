@@ -1,4 +1,4 @@
-const CACHE_NAME = "gomoku-pwa-v14";
+const CACHE_NAME = "gomoku-pwa-v15";
 const CORE_ASSETS = [
   "./",
   "./index.html",

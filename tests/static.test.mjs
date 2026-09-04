@@ -19,7 +19,7 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v14/);
+assert.match(serviceWorker, /gomoku-pwa-v15/);
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);
@@ -72,5 +72,24 @@ assert.doesNotMatch(style, /drop-shadow/);
 assert.match(script, /function refreshZoomLimit/);
 assert.match(script, /mobile \? 1\.00 : 1\.45/);
 assert.equal(existsSync(join(rootPath, "docs", "screenshot.png")), true);
+
+// ── 接續上一盤(2026-09-04):gomoku.session 的讀取半邊 ──
+assert.match(index, /id="resumeBtn"/, 'index.html 缺 #resumeBtn(接續上一盤那顆鈕)');
+assert.match(index, /id="resumeBtn"[^>]*hidden/, '#resumeBtn 預設要 hidden —— 沒棋局可接時不要擋路');
+// UA 的 [hidden] 選擇器比 .action-row button 弱,少了這行鈕永遠藏不掉(地雷 1 同族)
+assert.match(style, /\.action-row button\[hidden\]/);
+// ★★ 重播守門:沒有它,分享連結/匯入棋譜載入已分勝負的棋譜會讓勝場數加一(2026-09-04 前就存在的 bug)
+assert.match(script, /if \(replaying\) return;/);
+assert.match(script, /if \(!replaying\) \{ playClick\(\); showCommentary/);
+assert.match(script, /placeStone\(row, col, color, !replaying\)/);
+// 兩條重播路徑都要走 replaySilently,不可以再直接裸呼叫 commitMove 迴圈
+assert.match(script, /function replaySilently/);
+assert.equal((script.match(/replaySilently\(/g) || []).length, 4, 'replaySilently 應為 1 個定義 + 3 個呼叫(匯入棋譜、分享連結、接續上一盤)');
+// ⚠ RESUMABLE_SIZES 必須宣告在 offerResume() 被呼叫(開機 ~148 行)之前,否則是 TDZ ReferenceError
+//   —— 這個錯 npm test 完全看不到,只有真瀏覽器會炸;2026-09-04 實際踩過一次
+assert.ok(script.indexOf('const RESUMABLE_SIZES') < script.indexOf('offerResume();'),
+  'RESUMABLE_SIZES 要宣告在 offerResume() 呼叫之前(const 不會像 function 那樣提升到可用)');
+// 開機那行「黑棋先手」不可以無條件蓋掉分享棋譜載好的狀態
+assert.match(script, /if \(moveHistory\.length === 0\) updateStatus\(`黑棋先手/);
 
 console.log("static tests passed");

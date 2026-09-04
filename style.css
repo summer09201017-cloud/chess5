@@ -147,6 +147,8 @@ body {
 }
 
 .action-row button { flex: 1 1 auto; min-width: 80px; }
+/* 地雷 1 同族:.action-row button 的選擇器比 UA 的 [hidden] 強,沒下面這行「接續上一盤」永遠藏不掉 */
+.action-row button[hidden] { display: none; }
 
 button {
   padding: 9px 11px;

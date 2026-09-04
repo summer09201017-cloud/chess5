@@ -48,6 +48,7 @@ const ACHIEVEMENTS = [
 ];
 
 /* ---------- 2. 狀態 ---------- */
+const RESUMABLE_SIZES = [9, 13, 15, 19];   // 接續上一盤:認得的盤面大小(宣告在這裡,見 16b 節那條 TDZ 註解)
 let BOARD_SIZE = 15;
 let MARGIN_RATIO = 0.072;
 let CELL_RATIO = (1 - MARGIN_RATIO * 2) / (BOARD_SIZE - 1);
@@ -58,6 +59,8 @@ let pointRefs = [];
 let moveHistory = [];          // [{row,col,color}]
 let redoStack = [];
 let replayIndex = null;        // null = 即時, 數字 = 回放某步
+let replaying = false;         // ★ 正在重播棋譜(接續/分享連結/匯入):落子要「安靜」——不出聲、不冒泡、不動畫、不計分、不存檔
+let pendingSession = null;     // 開機時讀到的可接續棋局(還沒套用);null = 沒有可接的
 let currentPlayer = "black";
 let gameOver = false;
 let aiThinking = false;
@@ -117,6 +120,7 @@ const themeSelect = $("themeSelect");
 const skinSelect = $("skinSelect");
 const weatherSelect = $("weatherSelect");
 const soundToggle = $("soundToggle");
+const resumeBtn = $("resumeBtn");
 const commentaryBubble = $("commentaryBubble");
 const weatherCanvas = $("weatherCanvas");
 const confettiCanvas = $("confettiCanvas");
@@ -140,8 +144,11 @@ startAutoRotateLoop();
 startWeatherLoop();
 initPwa();
 maybeLoadFromUrl();
-updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
+// 只有真的是空盤才報「黑棋先手」—— maybeLoadFromUrl() 若載進了分享棋譜(甚至是一盤已分勝負的),
+// 無條件蓋掉會讓狀態列說謊:滿盤棋子配「黑棋先手」。
+if (moveHistory.length === 0) updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
 bootstrapPuzzleMode();   // ?puzzle=<id> 深連結,或上次就是解謎模式 → 直接載題(否則會是空盤配「黑棋先手」)
+offerResume();           // 有可接續的棋局才會亮出那顆鈕;放最後,分享連結/解謎深連結都處理完才問
 if (mode === "pve" && humanColor === "white") startAiTurn();
 
 /* ---------- 5. 棋盤建構 ---------- */
@@ -273,10 +280,9 @@ function commitMove(row, col, color) {
   boardState[row][col] = color;
   moveHistory.push({ row, col, color });
   redoStack = [];
-  placeStone(row, col, color, true);
+  placeStone(row, col, color, !replaying);   // 重播:不播落下動畫
   setLastMove(row, col);
-  playClick();
-  showCommentary(row, col, color);
+  if (!replaying) { playClick(); showCommentary(row, col, color); }   // 重播:不放 N 次落子聲、不跳 N 次旁白
 
   const win = checkWinFull(row, col, color);
   if (win) {
@@ -300,8 +306,8 @@ function commitMove(row, col, color) {
   } else if (mode === "online") {
     updateStatus(currentPlayer === onlineColor ? "輪到你" : "等待對手...");
   }
-  if (perMoveSeconds > 0 && !isPuzzleMode()) restartTurnTimer(currentPlayer);   // 解謎/每日不計時
-  saveOngoing();
+  if (!replaying && perMoveSeconds > 0 && !isPuzzleMode()) restartTurnTimer(currentPlayer);   // 解謎/每日不計時
+  if (!replaying) saveOngoing();   // 重播:重播完由呼叫端存一次就好,不必每手寫一次
   return true;
 }
 
@@ -328,11 +334,13 @@ function finalizeGame(winnerColor) {
   stopTimer();
   if (winnerColor) {
     updateStatus(`${playerLabel(winnerColor)} 獲勝 🎉`);
-    playWin();
-    burstConfetti();
+    if (!replaying) { playWin(); burstConfetti(); }
   } else {
     updateStatus("平手");
   }
+  // ★★ 重播到「已下完」的棋譜時,這一盤不是使用者下的 ⇒ 一律不計分、不存檔。
+  //    修掉一個現在就存在的 bug:分享連結與匯入棋譜載入已分勝負的棋譜,本機雙人的勝場數會直接加一。
+  if (replaying) return;
   if (mode === "pve") {
     if (winnerColor === humanColor) {
       stats.black = humanColor === "black" ? stats.black + 1 : stats.black;
@@ -799,7 +807,7 @@ function resetGame(opts = {}) {
   if (mode === "pve") {
     if (humanColor === "random") humanColor = Math.random() < 0.5 ? "black" : "white";
     updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
-    if (humanColor === "white") setTimeout(startAiTurn, 200);
+    if (humanColor === "white" && !replaying) setTimeout(startAiTurn, 200);   // 重播:空盤上先讓 AI 下一手會毀掉要重播的棋譜
   } else if (mode === "pvp") {
     updateStatus("黑棋先手（玩家 1）");
   } else if (mode === "online") {
@@ -810,8 +818,8 @@ function resetGame(opts = {}) {
   } else if (mode === "daily") {
     startDailyChallenge();
   }
-  if (perMoveSeconds > 0 && !isPuzzleMode()) startTimer();
-  saveOngoing();
+  if (!replaying && perMoveSeconds > 0 && !isPuzzleMode()) startTimer();
+  if (!replaying) saveOngoing();   // 重播:別在重播開始前就把要接續的存檔清成空盤
   refreshReplayUi();
 }
 
@@ -978,12 +986,116 @@ function saveSettings() {
 }
 
 function saveOngoing() {
+  hideResume();   // 只要棋局有任何前進,開機時那個「接續上一盤」的提議就過期了
   if (isPuzzleMode() || mode === "online") return;   // 解謎/每日不進存檔:存檔是「重播棋譜」,自訂起手會重建出別的局面
   try {
     localStorage.setItem("gomoku.session", JSON.stringify({
       size: BOARD_SIZE, mode, humanColor, history: moveHistory, gameOver,
     }));
   } catch {}
+}
+
+/* ---------- 16b. 接續上一盤（gomoku.session 的讀取半邊） ---------- */
+/*
+  設計三條(2026-09-04):
+  ① 不做成開機問話 —— 孩子與長輩開網頁就是想馬上下,多一個對話框是擋路。
+     改成「重新開始」旁邊,只有真的有棋局可接時才出現一顆鈕;沒有就完全看不到。
+  ② 已分勝負的存檔不接 —— 結算時也會存檔,接回來只會看到一盤下完的棋。
+  ③ 只接本機的 pve / pvp。解謎與每日本來就不寫存檔(局面是題目不是棋譜);
+     線上對戰接回來對手不在,接了也沒用。
+  ★ 計時器不必存:perMoveSeconds 是「每一手」的限時、每手都重設 ⇒ 接續回來拿到滿鐘
+    本來就是對的行為(你被打斷,重新輪到你就給你完整的思考時間),不是要修的漏洞。
+*/
+// ⚠ RESUMABLE_SIZES 宣告在檔案最上面的「狀態」節,不放這裡 ——
+//   offerResume() 在開機(第 ~148 行)就跑,而 const 不像 function 會提升到可用:
+//   放這裡會是 TDZ 的 ReferenceError,而且 npm test 全綠、只有真瀏覽器看得到。
+
+// 把一段「重播棋譜」的動作包起來:期間落子不出聲、不冒泡、不動畫、不計分、不存檔
+function replaySilently(fn) {
+  const was = replaying;
+  replaying = true;
+  try { fn(); } finally { replaying = was; }
+}
+
+function readSession() {
+  let s;
+  try {
+    const raw = localStorage.getItem("gomoku.session");
+    if (!raw) return null;
+    s = JSON.parse(raw);
+  } catch { return null; }
+  if (!s || typeof s !== "object") return null;
+  if (s.gameOver) return null;                                  // ② 已下完的不接
+  if (s.mode !== "pve" && s.mode !== "pvp") return null;        // ③ 只接本機對局
+  if (!RESUMABLE_SIZES.includes(s.size)) return null;
+  if (!Array.isArray(s.history) || s.history.length === 0) return null;
+  // 逐手驗形狀:存檔壞掉時要安靜地不提供接續,不能讓開機炸掉
+  const seen = new Set();
+  for (const m of s.history) {
+    if (!m || !Number.isInteger(m.row) || !Number.isInteger(m.col)) return null;
+    if (m.row < 0 || m.row >= s.size || m.col < 0 || m.col >= s.size) return null;
+    if (m.color !== "black" && m.color !== "white") return null;
+    const k = m.row * s.size + m.col;
+    if (seen.has(k)) return null;                               // 同一點下兩次 = 壞檔
+    seen.add(k);
+  }
+  return s;
+}
+
+function hideResume() {
+  pendingSession = null;
+  if (resumeBtn) resumeBtn.hidden = true;
+}
+
+function offerResume() {
+  if (!resumeBtn) return;
+  if (isPuzzleMode()) { hideResume(); return; }   // 正在解謎/每日,不要用一顆鈕把人拉走
+  const s = readSession();
+  if (!s) { hideResume(); return; }
+  pendingSession = s;
+  resumeBtn.textContent = `⟳ 接續上一盤（第 ${s.history.length} 手）`;
+  resumeBtn.title = `${s.size}路・${s.mode === "pve" ? "單人 vs 電腦" : "本機雙人"}，下到第 ${s.history.length} 手`;
+  resumeBtn.hidden = false;
+}
+
+function resumeSession() {
+  const s = pendingSession;
+  if (!s) return;
+  hideResume();                     // 先收鈕:底下 resetGame 會經過 saveOngoing,不收會再讀到自己
+  // 盤面大小與模式要在 resetGame 之前套好,resetGame 才會走對的分支
+  if (s.size !== BOARD_SIZE) {
+    BOARD_SIZE = s.size;
+    boardSizeSelect.value = String(s.size);
+    setBoardSize(s.size);
+  }
+  mode = s.mode;
+  modeSelect.value = s.mode;
+  document.body.dataset.mode = s.mode;
+  if (s.mode === "pve" && (s.humanColor === "black" || s.humanColor === "white")) {
+    humanColor = s.humanColor;
+    // 先手顏色是 radio 不是 select(同 loadPersistedSettings 的寫法)
+    document.querySelectorAll('input[name="playerColor"]').forEach(r => { r.checked = (r.value === humanColor); });
+  }
+  replaySilently(() => {
+    resetGame();
+    for (const m of s.history) {
+      if (!commitMove(m.row, m.col, m.color)) break;
+      if (gameOver) break;
+    }
+  });
+  // 重播完才把「活的」狀態接回來
+  saveOngoing();
+  if (perMoveSeconds > 0 && !isPuzzleMode() && !gameOver) startTimer();
+  refreshReplayUi();
+  bubble(`⟳ 已接續上一盤（第 ${moveHistory.length} 手）`);
+  if (!gameOver) {
+    if (mode === "pve") {
+      updateStatus(currentPlayer === humanColor ? "輪到你" : "輪到電腦");
+      if (currentPlayer !== humanColor) startAiTurn();
+    } else {
+      updateStatus(`輪到 ${currentPlayer === "black" ? "黑棋玩家" : "白棋玩家"}`);
+    }
+  }
 }
 
 /* ---------- 17. 棋譜匯出 / 匯入 / 分享 ---------- */
@@ -1008,14 +1120,16 @@ function exportGame() {
 }
 function importGameFromText(text) {
   const tokens = text.trim().split(/[\s,]+/).filter(Boolean);
-  resetGame();
-  for (const tk of tokens) {
-    const c = parseCoord(tk);
-    if (!c) { bubble(`座標錯誤：${tk}`); break; }
-    const color = moveHistory.length % 2 === 0 ? "black" : "white";
-    if (!commitMove(c.row, c.col, color)) { bubble(`重複座標：${tk}`); break; }
-    if (gameOver) break;
-  }
+  replaySilently(() => {
+    resetGame();
+    for (const tk of tokens) {
+      const c = parseCoord(tk);
+      if (!c) { bubble(`座標錯誤：${tk}`); break; }
+      const color = moveHistory.length % 2 === 0 ? "black" : "white";
+      if (!commitMove(c.row, c.col, color)) { bubble(`重複座標：${tk}`); break; }
+      if (gameOver) break;
+    }
+  });
   bubble(`匯入完成（${moveHistory.length} 步）`);
 }
 function makeShareUrl() {
@@ -1047,11 +1161,13 @@ function maybeLoadFromUrl() {
     mode = "pvp";
     modeSelect.value = "pvp";
     document.body.dataset.mode = "pvp";
-    for (const [r, c] of data.m) {
-      const color = moveHistory.length % 2 === 0 ? "black" : "white";
-      commitMove(r, c, color);
-      if (gameOver) break;
-    }
+    replaySilently(() => {
+      for (const [r, c] of data.m) {
+        const color = moveHistory.length % 2 === 0 ? "black" : "white";
+        commitMove(r, c, color);
+        if (gameOver) break;
+      }
+    });
     bubble(`已載入分享棋譜（${moveHistory.length} 步）`);
   } catch (e) { console.warn("分享連結解析失敗", e); }
 }
@@ -1788,6 +1904,7 @@ function attachEvents() {
 
   // 操作按鈕
   $("resetBtn").addEventListener("click", () => resetGame());
+  if (resumeBtn) resumeBtn.addEventListener("click", resumeSession);
   $("undoBtn").addEventListener("click", undoMove);
   $("redoBtn").addEventListener("click", redoMove);
   $("hintBtn").addEventListener("click", showHint);

@@ -11,7 +11,7 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-03)
+## 現況(2026-09-04)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
@@ -33,7 +33,9 @@
   - 題目 id 改成**內容雜湊**(`vcf3-a1b2c3`):重生或補題都不會讓玩家的「已解」跑到別題身上
   - `npm run puzzles:more -- <seed>` 補題:保留現有每一題,只補配額還缺的桶;每次生成/補題記在 `PUZZLE_META.runs`
   - 題庫現況 **84 題**(入門 16・進階 18・高手 27・大師 23;黑先 43 / 白先 41;最深 7 步;守備題進階 8・高手 8・大師 7)
-  - **0903 交接場**:守備配額 6/4/4 → 8/8/8 後補題 +9;`gomoku.session` 那張卡與「加題不是換種子」見地雷 14/15
+  - **0903 交接場**:守備配額 6/4/4 → 8/8/8 後補題 +9;「加題不是換種子」見地雷 15
+  - **0904 接續上一盤**:`gomoku.session` 補上讀取半邊(⟳ 鈕,只有真的有棋局可接時才出現)
+    + 修掉「載入已下完的棋譜會偷加勝場」的計分污染 + 開機狀態列說謊。SW **v15**。見地雷 14/16
 
 ### 待做
 見 `roadmap.md`。
@@ -52,6 +54,7 @@
 | `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js / daily-picker.js |
 | `scripts/gen-puzzles.mjs` | 題庫生成器:自我對弈 → 解題器證明 → 分級挑題 → 寫 puzzles.js(種子+局數決定,可重現) |
 | `scripts/smoke-puzzles.mjs` | 解謎流程真瀏覽器冒煙(Playwright,借 Desktop/hfpc-sparks-hub 的;不在 npm test 裡) |
+| `scripts/smoke-resume.mjs` | 接續上一盤真瀏覽器冒煙(15 項;同樣借 Playwright、不在 npm test 裡)。**動 `replaying` / `commitMove` / 開機序列就要跑它** |
 | `tests/` | `game-rules.test.mjs`(規則)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `daily-picker.test.mjs`(每日抽題掃 400 天)+ `static.test.mjs`(靜態字串) |
 
 棋盤座標的單一真相:`script.js` 的 `ratioAtIndex()` / `CELL_RATIO` / `MARGIN_RATIO` / `HOTSPOT_RATIO`。
@@ -94,16 +97,26 @@
     全部重生(`npm run puzzles`)也不會改變沒動過的題的 id。**不要手改 setup、不要手編 id。**
 13. **每日挑戰與解謎共用第 19 節的流程**,分歧只在 `mode === "daily"` 幾個點(`puzzleEls()` 寫到哪個面板、
     `dailyState` 決定題目、`recordDailySolve` 記進度)。要改解題流程改第 19 節一處就好;不要為每日另寫一套。
-14. **`localStorage` 四個鍵,其中一個是半套的**:`gomoku.stats`(戰績)/`gomoku.settings`(偏好)/
-    `gomoku.puzzles`(解謎進度)/`gomoku.daily`(每日日曆)都有寫也有讀;
-    **`gomoku.session`(對局進度)只有 `saveOngoing()` 在寫、開機沒有任何地方讀它** ⇒
-    關掉網頁再開,那盤棋不會回來,而存檔還在越寫越新。要動它之前看 roadmap **第一張卡**
-    (0903 已查出四個陷阱,使用者已聽過建議「做完它、但不要做成開機問話」,**尚未說開工**)。
-    hook `localstorage-key-guard` 每次改 `script.js` 都會提醒這一條——**那不是誤報**。
-    ★★ 其中一個陷阱是**現在就存在的 bug**:重播棋譜走 `commitMove`,最後一手會觸發 `finalizeGame` ⇒
-    **分享連結(`maybeLoadFromUrl`)與匯入棋譜(`importGameFromText`)載入「已下完」的棋譜時,
-    本機雙人的勝場數會多加一**,而那盤棋不是使用者下的,測試/部署/畫面全都正常。
-    補一個「正在重播」開關(同時關掉落子音效、旁白氣泡、落下動畫、結算)可一起治好它與接續功能。
+14. **`replaying` 旗標:任何「把棋譜放回盤上」的路徑都必須包在 `replaySilently()` 裡。**
+    `localStorage` 五個鍵現在都是「有寫也有讀」的完整對(`stats`/`settings`/`puzzles`/`daily`/`session`);
+    `gomoku.session` 的讀取半邊 2026-09-04 補上了(第 16b 節:`readSession` / `offerResume` / `resumeSession`)。
+    ★★ **為什麼需要這個旗標**:重播是走 `commitMove`,而它帶四個副作用——落子音效、旁白氣泡、
+    落下動畫,以及**最後一手觸發 `finalizeGame`**。第四個是真的 bug:
+    **載入一盤「已下完」的棋譜,本機雙人的勝場數會直接加一**,而那盤棋不是使用者下的。
+    現在有三條路徑走重播(匯入棋譜 / 分享連結 / 接續上一盤),`replaySilently()` 把它們全包起來:
+    期間**不出聲、不冒泡、不動畫、不計分、不存檔**;`resetGame` 在重播中也不踢 AI、不起鐘、不覆蓋存檔。
+    ⇒ **以後再加任何一條重播路徑,一律包 `replaySilently()`**;static test 會數 `replaySilently(` 的出現次數。
+    ⚠ `hook localstorage-key-guard` 現在對這支檔仍會提醒「讀了從不寫」——那是它只看單檔的限制,已是誤報。
+    ⚠ **計時器刻意不存**:`perMoveSeconds` 是「每一手」的限時、每手都重設 ⇒ 接續回來拿到滿鐘
+    本來就對(被打斷、重新輪到你就給完整思考時間)。0903 的卡把它列成第四個地雷,**那是誤判**。
+
+16. **★★ `const` 不會像 `function` 那樣提升到「可用」——開機那段程式碰不到檔案下半部的 `const`。**
+    2026-09-04 實錄:`offerResume()` 在開機(約第 148 行)就跑,而 `const RESUMABLE_SIZES` 原本
+    宣告在第 16b 節(約第 1030 行)⇒ **TDZ 的 `ReferenceError`**,
+    而且它一拋,**開機序列後面那行 `startAiTurn()` 也整個沒跑**。
+    ★★ **`npm run verify` 完全綠**(`node --check` 只驗語法、單元測試載不進 DOM 耦合的 `script.js`),
+    部署也會全綠,只有**真的開一次瀏覽器**才看得到。
+    ⇒ 開機序列(第 4 節)呼叫得到的東西,`const` 一律宣告在第 2 節「狀態」那裡。
 15. **加題不是換種子。** 生成器的桶滿了就不再搜那一類(`needKind`),所以配額滿的情況下
     `npm run puzzles:more -- <新種子>` 會在幾秒內誠實回報「新增 0」。要更多題**先調 `TIERS` 的 `want`**。
 
@@ -126,7 +139,18 @@ curl -s "https://5-chess.pages.dev/service-worker.js?b=<隨機數>" | head -1
 
 ```bash
 npm run verify        # lint + 單元測試(必須綠)
+
+# 動了 replaying / commitMove / 開機序列 / localStorage 讀寫 → 一定要再跑真瀏覽器冒煙:
+python -m http.server 8765 --bind 127.0.0.1      # 另一個視窗
+node scripts/smoke-resume.mjs                    # 接續上一盤(15 項)
+node scripts/smoke-puzzles.mjs                   # 解謎流程(23 項)
 ```
+★★ **`npm run verify` 綠 ≠ 開得起來。** `script.js` 與 DOM 耦合、單元測試載不進去,
+`node --check` 只驗語法 ⇒ **TDZ 的 ReferenceError、開機序列被中斷、狀態列說謊這三類全部驗不到**
+(2026-09-04 三個都真的踩到了,見地雷 16)。
+★ 冒煙紅了先問「**是產品錯還是驗法錯**」:0904 那輪連三次紅燈全是驗法寫錯
+(4 手後輪黑不是輪白 / 第 9 手成五就 break 所以 9 顆不是 10 顆 /
+`page.goto(BASE + "#share=...")` 是**同文件 hash 跳轉不會重跑 script.js**,不 `reload()` 會**假綠**)。
 版面/對位類改動**一定要用真瀏覽器量**,而且:
 - 量「棋子 vs 格線」,**不要只量「棋子 vs 它所屬的交點」**——兩者會一起位移,量出來永遠是 0,會誤判沒問題。
 - hover 類問題要量**三態**:hover 前 / hover 中 / 移開後,並印 `getComputedStyle(el).transform`。

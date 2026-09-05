@@ -59,7 +59,7 @@
 | 一個月後刪掉 Netlify 站 | 5 分 | ★★ | 2026-10-01 之後。轉址掛滿一個月再刪(照 netlify-to-cloudflare-migrate 慣例)。還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4` |
 | SW 版號自動化 | 20 分 | ★★ | `CACHE_NAME` 與 `tests/static.test.mjs` 兩處硬編,要人記得同時改。改成測試只驗格式 `gomoku-pwa-v\d+`,再加一個 pre-push 檢查「殼層檔有動就必須 bump」 |
 | 對位迴歸測試 | 40 分 | ★★ | 把這次的 Playwright 量測(全盤交點 vs 格線、hover 三態)收成 `tests/alignment.mjs`,避免再有人用 transform 做定位而沒人發現 |
-| 手機觸控落子放大鏡 | 60 分 | ★★ | 手機上棋子直徑約 16px,手指會蓋住目標。按住時在上方顯示放大預覽,放開才落子 |
+| ~~手機觸控落子放大鏡~~ ✅ **0905 v17 完工**(共用件 `touch-lens.js`,正本在 skills repo canvas-touch-targets/assets;拖到別格放開=代按那格 .click()) | 60 分 | ★★ | 手機上棋子直徑約 16px,手指會蓋住目標。按住時在上方顯示放大預覽,放開才落子。⚠ 未實機驗手感,請使用者手機按一次 |
 | 線上對戰斷線重連 | 90 分 | ★ | 現在 PeerJS 斷了就結束,只顯示「對手已離線」。可存房號+棋譜,重連後續盤 |
 
 ## 🚫 刻意不做

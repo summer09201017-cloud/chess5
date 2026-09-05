@@ -1,7 +1,22 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-04(♟ 接續上一盤 + 修掉「載入棋譜偷加勝場」的計分污染;SW v15)
-                                     前一版:2026-09-03(每日挑戰改題庫制 + 補題模式;再前一日殘局解謎重做)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-05(HFP 機・Fable 5.1:📊 接 play-stats 三層 + 🔍 觸控放大鏡;SW v17)
+                                     前一版:2026-09-04(♟ 接續上一盤 + 修掉「載入棋譜偷加勝場」的計分污染;SW v15)
 ================================================================================
+
+★★★★★ 2026-09-05(HFP 機・Fable 5.1・0904-fb)📊 接統計 + 🔍 觸控放大鏡 —— SW v15 → v16 → v17 ★★★★★
+  由來:十二站健檢時本站是唯一沒接統計的(0905 全艦隊覆蓋率掃描列在 🔴 十站),使用者拍板「所有作品一律接統計」+ 第 1 層九件開工。
+  ① v16(354f00f)📊 play-stats 三層:index.html 開啟一發 + 開頁到第一次離開一發 -dwell(3~1800 秒;遊戲語意,照 play-stats-dwell 鐵則);
+     script.js finalizeGame 在 `if (replaying) return` **之後**送 -done 帶本局秒數(resetGame 記 window.__matchT0)⇒ 重播/匯入/分享載入的棋不算完局。
+     本機 localhost/127.0.0.1 靜默跳過。worker NAMES 顯示名「3D 五子棋」(0904-96 補)。
+  ② v17(4c56c85)🔍 放大鏡:共用件 touch-lens.js(**正本在 skills repo canvas-touch-targets/assets,這裡是逐位元副本,改正本再搬**)。
+     只認 pointerType=touch:pointerdown 開 fixed 圓形放大框在手指上方 90px(3×3 鄰格 + 第 N 列・第 M 行),pointermove 用 elementFromPoint 找目前指到的
+     .intersection,pointerup 若與起點不同格就代按那格 .click() ⇒ 規則/禁手/線上同步全走原路;起點格若仍收到 click 用 lensSuppressClick 吞掉(保險)。
+     .intersections 加 touch-action:none。SW CORE_ASSETS + scripts/stage.mjs SITE_FILES 都補了 touch-lens.js(少一個 cache.addAll 整批失敗)。
+  ⚠⚠ **部署雷(0905 實錘)**:`npm run deploy` 的 verify+stage 綠、**pages deploy 那步靜默沒發生**,線上停 v15 兩分多鐘才被 curl 抓到;
+     直接 `npx wrangler pages deploy .deploy --project-name=5-chess --branch=main --commit-dirty=true` 才上。⇒ 部署後**一定 curl 線上 sw 版號**,不信腳本的綠。
+  ⚠ in-app-browser-guard 對 script.js 既有安裝鈕(beforeinstallprompt 沒 LINE 內建瀏覽器偵測)每次 Edit 都提醒——舊債,本輪未動,記 roadmap。
+  驗法:npm test 全綠(84 題重證)・線上 https://5-chess.pages.dev/service-worker.js 有 gomoku-pwa-v17、/touch-lens.js 200 有 createTouchLens、index 有 g=chess5。
+  📋 待使用者:手機上按一次放大鏡(手感只有人驗得出來)。
 
 ■ 這是什麼
   純前端 PWA 五子棋。零相依、無建置步驟(沒有 npm 套件、沒有 bundler),

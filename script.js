@@ -1,4 +1,5 @@
 import { analyzeForbiddenMove, analyzeMoveThreat } from "./game-rules.js";
+import { createTouchLens, paintBoardNeighborhood } from "./touch-lens.js";   // 🔍 手機觸控放大鏡(共用件,正本在 skills repo canvas-touch-targets/assets)
 import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
 import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
 import { pickDailySet, dailyKey, shiftKey, DAILY_KEEP_DAYS } from "./daily-picker.js";
@@ -198,6 +199,44 @@ function buildGrid() {
   });
 }
 
+/* 🔍 手機觸控放大鏡(0905,roadmap「手機觸控落子放大鏡」;共用件 touch-lens.js,五子棋/圍棋同一份):
+   手機上棋子直徑約 16px、手指一按就把目標蓋住 ⇒ 按住時在手指上方放大顯示「指到哪一格、旁邊是什麼」,
+   拖到別格再放開,落的是**最後那格**;放開在原格就照原本的 click 落子。桌機滑鼠完全不受影響(只認 pointerType=touch)。
+   ★ 不另寫一套落子:拖到別格放開時就是「代按那格的按鈕」(.click()),規則、禁手、線上同步全部走原路。 */
+const touchLens = createTouchLens({
+  size: 120, offsetY: 90,
+  label: (t) => `第 ${t.r + 1} 列・第 ${t.c + 1} 行`,
+  paint: (ctx, t, w, h) => paintBoardNeighborhood(ctx, w, h, t,
+    (r, c) => (r < 0 || c < 0 || r >= BOARD_SIZE || c >= BOARD_SIZE) ? undefined : boardState[r][c]),
+});
+let lensDrag = null;            // { id, startBtn, target }
+let lensSuppressClick = null;   // 拖到別格放開時,若瀏覽器仍把 click 派給原格就吞掉(規格上不會,留個保險)
+function lensBegin(e, p) {
+  if (gameOver || aiThinking || replayIndex !== null) return;
+  lensDrag = { id: e.pointerId, startBtn: p, target: p };
+  touchLens.show({ r: Number(p.dataset.row), c: Number(p.dataset.col) }, e.clientX, e.clientY);
+}
+document.addEventListener("pointermove", (e) => {
+  if (!lensDrag || e.pointerId !== lensDrag.id) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const b = el && el.closest ? el.closest(".intersection") : null;
+  if (b) lensDrag.target = b;
+  const t = lensDrag.target;
+  touchLens.move({ r: Number(t.dataset.row), c: Number(t.dataset.col) }, e.clientX, e.clientY);
+}, { passive: true });
+function lensEnd(e, cancelled) {
+  if (!lensDrag || e.pointerId !== lensDrag.id) return;
+  const d = lensDrag; lensDrag = null; touchLens.hide();
+  if (cancelled) return;
+  if (d.target !== d.startBtn) {
+    lensSuppressClick = d.startBtn;
+    d.target.click();
+    setTimeout(() => { lensSuppressClick = null; }, 400);
+  }
+}
+document.addEventListener("pointerup", (e) => lensEnd(e, false));
+document.addEventListener("pointercancel", (e) => lensEnd(e, true));
+
 function buildIntersections() {
   intersections.innerHTML = "";
   pointRefs = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
@@ -219,7 +258,7 @@ function buildIntersections() {
       p.setAttribute("aria-label", `第 ${r+1} 列 第 ${c+1} 行 空位`);
       p.addEventListener("click", onPointClick);
       // 阻止 pointerdown 冒泡到 scene 的拖曳處理器，避免微抖動吃掉 click
-      p.addEventListener("pointerdown", (e) => e.stopPropagation());
+      p.addEventListener("pointerdown", (e) => { e.stopPropagation(); if (e.pointerType === "touch") lensBegin(e, p); });   // 🔍 觸控才開放大鏡
       intersections.appendChild(p);
       pointRefs[r][c] = p;
     }
@@ -228,6 +267,7 @@ function buildIntersections() {
 
 /* ---------- 6. 落子核心 ---------- */
 function onPointClick(event) {
+  if (lensSuppressClick && event.currentTarget === lensSuppressClick) { lensSuppressClick = null; return; }   // 🔍 拖到別格放開:原格的 click 不算
   if (gameOver || aiThinking || replayIndex !== null) return;
   const p = event.currentTarget;
   const row = Number(p.dataset.row);

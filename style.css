@@ -505,6 +505,7 @@ body[data-theme="cyber"] .star-point { box-shadow: 0 0 8px var(--star); }
 
 .intersections {
   z-index: 2;
+  touch-action: none;   /* 🔍 放大鏡要拖動修正目標,不能讓瀏覽器把手指移動當成捲頁 */
   transform-style: flat;
 }
 

@@ -22,6 +22,7 @@ const SITE_FILES = [
   "index.html",
   "style.css",
   "script.js",
+  "touch-lens.js",
   "game-rules.js",
   "puzzle-solver.js",
   "puzzles.js",

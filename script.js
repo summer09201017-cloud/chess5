@@ -341,6 +341,13 @@ function finalizeGame(winnerColor) {
   // ★★ 重播到「已下完」的棋譜時,這一盤不是使用者下的 ⇒ 一律不計分、不存檔。
   //    修掉一個現在就存在的 bug:分享連結與匯入棋譜載入已分勝負的棋譜,本機雙人的勝場數會直接加一。
   if (replaying) return;
+  // 📊 play-stats -done:玩完一局(t=本局秒數,從 resetGame 起算)。重播的棋不算(上一行已 return)。統計是配菜,失敗靜默。
+  try {
+    if (!["localhost", "127.0.0.1"].includes(location.hostname)) {
+      const dt = Math.round((Date.now() - (window.__matchT0 || Date.now())) / 1000);
+      navigator.sendBeacon?.("https://hfpc-play-stats.summer09201017.workers.dev/api/ping?g=chess5-done&t=" + dt);
+    }
+  } catch (_) { /* 統計是配菜 */ }
   if (mode === "pve") {
     if (winnerColor === humanColor) {
       stats.black = humanColor === "black" ? stats.black + 1 : stats.black;
@@ -785,6 +792,7 @@ function stopTimer() {
 
 /* ---------- 12. 重新開始 ---------- */
 function resetGame(opts = {}) {
+  window.__matchT0 = Date.now();   // 📊 給 finalizeGame 的 -done 算「本局秒數」用
   clearTimeout(aiTimer);
   setAiThinking(false);
   boardState = createEmptyBoard(BOARD_SIZE);

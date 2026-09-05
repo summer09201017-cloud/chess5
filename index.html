@@ -260,6 +260,25 @@
     </form>
   </dialog>
 
+  <script>
+  // 📊 play-stats(零個資,只送「哪個站、哪天、停多久」):開啟一發 + 真實停留 -dwell(開頁到第一次離開;遊戲語意,照 play-stats-dwell 鐵則)。
+  //    -done 在 script.js finalizeGame(重播的棋不算)。本機預覽 / 離線 / 被擋都靜默跳過——統計是配菜,不能影響遊戲。
+  (function () {
+    try {
+      if (['localhost', '127.0.0.1'].includes(location.hostname)) return;
+      var U = 'https://hfpc-play-stats.summer09201017.workers.dev/api/ping?g=chess5';
+      navigator.sendBeacon && navigator.sendBeacon(U);
+      var t0 = Date.now(), sent = false;
+      function leave() {
+        if (sent) return; sent = true;
+        var s = Math.round((Date.now() - t0) / 1000);
+        if (s >= 3 && s <= 1800) { try { navigator.sendBeacon(U + '-dwell&t=' + s); } catch (e) {} }
+      }
+      addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') leave(); });
+      addEventListener('pagehide', leave);
+    } catch (e) {}
+  })();
+  </script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script type="module" src="script.js"></script>
 </body>

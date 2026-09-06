@@ -37,7 +37,12 @@
      修法:scripts/smoke-ai.mjs 在 reset 落定後把 __maxGap 歸零,量測窗從第一手開始。改後線上 3 輪 183 / 167 / 183、hard 100、本機 117,穩了。
      ★ 通則兩條:①「3 輪對 3 輪」不夠下「回歸」的結論,尤其兩邊網址新舊不同(正式 vs preview)還混著;②量法自稱量什麼、就只能包含那段——
         跟 tests/ai-engine.test.mjs 那顆 VCT 題同一族(測試量到的是「這台機今天多快」而不是它宣稱的東西),差別只在這次是「這條網路今天多快」。
-  🧾 git 事實:程式 `8c306d3`(v23)+ 本 commit(smoke ⑥ 量測窗 + 文件);status 空、@{u}..HEAD = 0 見 git log -1。
+  🧾 git 事實(/handoff 專案級交接時實查,2026-09-07 凌晨):程式 `8c306d3`(v23)→ `904f4a0`(smoke ⑥ 量測窗 + 文件)→ 本交接 commit(HEAD 見 git log -1);
+     rev-list @{u}..HEAD = 0、HEAD == origin/main、.gitattributes 無 export-ignore;線上 https://5-chess.pages.dev sw gomoku-pwa-v23;
+     npm run verify 全綠(vertag sw v23 / 84 題重證 / ai-engine 31)、smoke-ai 線上 master 3 輪 + hard 全綠。
+     ⚠ 交接當下工作區**不是空的**:index.html / service-worker.js / tests/static.test.mjs / CLAUDE.md 四檔是**另一場**
+       (0906-<檢查手機版全螢幕>)正在套「⛶ 直向放大鈕 mfs-portrait-zoom v1、SW v24」的半成品(使用者已拍板「棋類 9 站套放大鈕」)
+       —— 不屬本場、未 commit、**不在桌面 zip 裡**(zip 以 git archive HEAD 打,與 origin/main 逐檔一致)。接手看到 v24 的段落再讀那場的交接。
 
 ★★★★★ 2026-09-06 下午③(agape250 機・Fable 5.1・take-over 場)🧵 引擎搬 Web Worker + 🛡 困難檔接防守層 —— SW v20 → v21 ★★★★★
   🧾 git 事實(/handoff 交接時實查,不是憑印象):status --short 空・程式最後一顆 b5b44c0(本交接 commit 之後 HEAD 見 git log -1)・rev-list @{u}..HEAD = 0(真的推上去了)

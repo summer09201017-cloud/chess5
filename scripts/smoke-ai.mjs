@@ -112,6 +112,16 @@ try {
   replied >= 2 ? ok("② 電腦連續回手", `${replied} 次${ended ? "(對局已分勝負)" : ""}`) : bad("② 電腦回手中斷", `${replied} 次`);
   !blackUnstoppable ? ok("② 黑亂下時電腦沒放任黑拿到擋不住的活四") : bad("② 電腦放任黑棋活三 → 活四", "大師不該讓這種事發生");
 
+  // ⑤ 🏷 版本號兩件套(鐵則⑦,0906):左欄簡歷版號 == sw;重整一次後右下徽章顯示同一版(SW 接管後才問得到)
+  const swTxt = await page.evaluate(async () => { try { return await (await fetch("service-worker.js", { cache: "no-store" })).text(); } catch (_) { return ""; } });
+  const swV = (swTxt.match(/gomoku-pwa-v(\d+)/) || [])[1] || "";
+  const tagV = await page.evaluate(() => (((document.getElementById("verTag") || {}).textContent || "").match(/版本 v(\d+)/) || [])[1] || "");
+  swV && tagV === swV ? ok("⑤ 左欄改版簡歷版號 == sw", "v" + tagV) : bad("⑤ 簡歷版號與 sw 不同", `verTag v${tagV} vs sw v${swV}`);
+  await page.reload({ waitUntil: "load" });
+  await page.waitForFunction(() => /版本 v\d+/.test((document.getElementById("appVerBadge") || {}).textContent || ""), null, { timeout: 8000 }).catch(() => {});
+  const badge = await page.evaluate(() => (document.getElementById("appVerBadge") || {}).textContent || "");
+  new RegExp("版本 v" + swV + "[(（]").test(badge) ? ok("⑤ 右下徽章顯示實際執行版本", badge) : bad("⑤ 徽章沒顯示對的版本", badge || "(空)");
+
   errs.length === 0 ? ok("④ 無 console error / pageerror") : bad("④ 有例外", errs.slice(0, 3).join(" | "));
 } catch (e) {
   bad("腳本中斷", String(e).slice(0, 200));

@@ -1,9 +1,18 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06(agape250 機・Fable 5.1:🧠 大師檔 + 💡 提示換引擎 ai-engine.js;SW v19)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06(agape250 機・Fable 5.1:🏷 版本號兩件套 + 🧠 大師檔/提示換引擎 ai-engine.js;SW v20)
                                      前一版:2026-09-05(📊 接 play-stats 三層 + 🔍 觸控放大鏡;SW v17)
 ================================================================================
 
-★★★★★ 2026-09-06(agape250 機・Fable 5.1・take-over 場)🧠 大師檔 + 💡 提示換引擎 ai-engine.js —— SW v17 → v18 → v19 ★★★★★
+★★★★★ 2026-09-06 下午②(agape250 機・Fable 5.1・take-over 場)🏷 版本號兩件套(鐵則⑦)—— SW v19 → v20 ★★★★★
+  由來:0906 全艦隊普查本站 🔴(沒有版本號徽章與改版簡歷);使用者接著引擎那件點名「開工」。
+  做:index.html 左欄「安裝 APP」下面加 <details class="ver-fold">(summary「版本 v20(2026-09-06)・看看前幾版做了什麼」+ #verTag 白話簡歷 v20→v1);
+      #appVerBadge 容器放 scene 旁,邏輯在 script.js 尾(本站鐵則 index.html 無內嵌 JS):問控制中的 SW GET_VERSION,10 秒淡出;service-worker.js 回 SW_VERSION。
+      版本沿革從 git 逐版對回來(v5 2026-05-01 首次公開 → v19);v4~v1 版控沒有紀錄,簡歷老實寫「上線前草稿」範圍,vertag 測試容許「vA~vB」展開。
+  守:tests/vertag.test.mjs(npm test)——verTag==sw / 前幾版不跳號 / 帶日期 / summary 同版 / CLAUDE.md 最新 SW vN 同版 / 徽章三件套 / script.js 不寫死版號;
+      static.test 加「兩件套還在」;scripts/smoke-ai.mjs 加 ⑤:簡歷版號 == sw、重整後徽章真的顯示「版本 v20(這台裝置實際執行中的版本)」。
+  ★ 改版從此四處一起改:service-worker.js CACHE_NAME、tests/static.test.mjs 硬編版號、index.html verTag、CLAUDE.md 現況一條 SW vN(地雷 4 已補這句)。
+
+$1 大師檔 + 💡 提示換引擎 ai-engine.js —— SW v17 → v18 → v19 ★★★★★
   由來:使用者手機上原話「五子棋的 ai 提示,ai 太弱了,因我照 ai 提示去下棋,結果就輸了,請加強 ai」。
   病根:提示 = chooseAiMove(AI_LEVELS.master),而大師只是候選點打分 + 3 層淺搜(radius 1、top 8、static eval):
        只擋「下一手就成五」,看不見對手活三→活四的連環殺,也不會找自己的連續衝四 ⇒ 照它下,對手一個三三/四三就輸。

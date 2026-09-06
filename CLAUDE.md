@@ -43,6 +43,9 @@
   提示氣泡會念理由(「對手活三,必須擋或反衝四」「往後算了 4 手」)。**簡單/普通/困難三檔一個字沒動**(孩子要玩得贏)。
   `tests/ai-engine.test.mjs` 24 項戰術題(解題器當裁判)・`scripts/ai-bench.mjs` 新引擎 vs 舊大師 **6:0**(引擎每手 900ms=線上設定,平均 203~303ms/手;預算壓到 250ms 時 5:1、平均 82~137ms)・`scripts/smoke-ai.mjs` 真瀏覽器 8 項(本機+線上)。SW **v19**(v18 是首版引擎、8 分鐘後被 v19 蓋掉:解題器加 deadline)。
   ⚠ 黑棋開禁手時引擎不用攻擊層(解題器是自由規則,黑的必勝線可能踩禁手點),守的那半照用;候選一律過 `analyzeForbiddenMove`。
+- **2026-09-06 🏷 版本號兩件套(鐵則⑦;0906 全艦隊普查本站原列 🔴)**:左欄底 `details.ver-fold` 摺疊改版簡歷(v20→v1 白話、不跳號;v4~v1 上線前草稿版控無紀錄,寫成範圍)
+  + 右下 `#appVerBadge` 問 SW 拿真版本、10 秒淡出(邏輯在 `script.js` 尾,`index.html` 維持無內嵌 JS)。`tests/vertag.test.mjs` 守 verTag==sw / 前幾版不跳號 / 帶日期 / CLAUDE.md 最新 SW vN 同版 / 徽章三件套 / script.js 不寫死版號。
+  ★ **改版四處一起改:`service-worker.js` CACHE_NAME、`tests/static.test.mjs` 硬編版號、`index.html` verTag(summary + 本版一句 + 前幾版)、CLAUDE.md 這裡寫一條 SW vN**——漏一處 npm test 當場紅。SW **v20**。
 
 ### 待做
 見 `roadmap.md`。
@@ -84,6 +87,7 @@ $1`ai-engine.test.mjs`(引擎戰術 24 項,解題器當裁判)+ `puzzle-solver.t
    現在靠 `margin-left: calc(max(1px,0.24%) * -0.5)` 校正。
 4. **改了 `index.html`/`style.css`/`script.js`/`game-rules.js` 就要 bump `service-worker.js` 的 `CACHE_NAME`**,
    否則已安裝的 PWA 永遠吃舊快取(它是 cache-first)。`tests/static.test.mjs` 有硬編版本號,要一起改。
+   **0906 起還要一起改 `index.html` 的 verTag(summary 與簡歷)並在 CLAUDE.md 現況寫一條 SW vN**,`tests/vertag.test.mjs` 會紅。
 5. **push 到 GitHub 不會上線。** 見下面「部署」。
 6. **部署清單的單一真相之源是 `scripts/stage.mjs`**,不要另外手抄一份要上傳哪些檔。
    它同時會檢查 `service-worker.js` 的 CORE_ASSETS 每一項都真的在 `.deploy/` 裡

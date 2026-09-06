@@ -1,4 +1,4 @@
-const CACHE_NAME = "gomoku-pwa-v19";
+const CACHE_NAME = "gomoku-pwa-v20";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -31,6 +31,11 @@ self.addEventListener("activate", (event) => {
         .map((key) => caches.delete(key))
     )).then(() => self.clients.claim())
   );
+});
+
+// 🏷️ 版號回報(艦隊鐵則⑦,0906):右下徽章問「實際執行中的版本」,答案 = 本 SW 的快取名。
+self.addEventListener("message", (event) => {
+  if (event && event.data === "GET_VERSION" && event.source) event.source.postMessage({ type: "SW_VERSION", v: CACHE_NAME });
 });
 
 self.addEventListener("fetch", (event) => {

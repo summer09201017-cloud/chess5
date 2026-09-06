@@ -756,3 +756,10 @@ body[data-skin="fruit"] .intersection.last-move::after {
   }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* 🏷 版本號+改版簡歷(鐵則⑦,0906):摺疊列 44px 好按;徽章顏色跟主題 --text-soft */
+.ver-fold { margin-top: 10px; font-size: 12.5px; color: var(--text-soft); }
+.ver-fold summary { cursor: pointer; font-weight: 700; padding: 10px 6px; }
+.ver-tag { margin: 4px 6px 8px; line-height: 1.65; }
+.ver-tag b { color: var(--text); }
+#appVerBadge { position: fixed; right: 6px; bottom: 4px; font-size: 11px; line-height: 1; opacity: .6; z-index: 2147483000; pointer-events: none; color: var(--text-soft); font-family: system-ui, sans-serif; }

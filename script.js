@@ -2198,3 +2198,31 @@ function playerLabel(color) {
   return color === "black" ? "黑棋" : "白棋";
 }
 function updateStatus(t) { statusEl.textContent = t; }
+
+/* ---------- 🏷 版本號徽章(艦隊鐵則⑦,0906;index.html 只放容器,邏輯在這) ----------
+   問「正在控制本頁的 SW」拿版本 = 你手上真的在跑的那一版;頁面不寫死任何版號(不會漂;tests/vertag.test.mjs 釘死)。
+   徽章 position:fixed 在右下角會蓋住按鈕的字(pointer-events:none 只讓點擊穿過去)⇒ 10 秒後淡出,想看就重整一次。
+   硬重整(Ctrl+F5)的分頁不受 SW 管、問不到 → 誠實顯示退路;SW 換版接管時(controllerchange)會再問,自動換新。 */
+(function appVerBadge() {
+  const el = $("appVerBadge");
+  if (!el) return;
+  el.style.transition = "opacity .8s";
+  setTimeout(() => { el.style.opacity = "0"; setTimeout(() => { el.style.display = "none"; }, 900); }, 10000);
+  if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+  let got = false;
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "SW_VERSION") {
+      got = true;
+      const s = String(e.data.v), m = /-((?:v|nf)?\d+)$/.exec(s);
+      el.textContent = `🏷️ 版本 ${m ? m[1] : s}（這台裝置實際執行中的版本）`;
+    }
+  });
+  const ask = () => { const c = navigator.serviceWorker.controller; if (c) c.postMessage("GET_VERSION"); };
+  navigator.serviceWorker.ready.then(ask).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", ask);
+  setTimeout(() => {
+    if (got) return;
+    if (!navigator.serviceWorker.controller) el.textContent = "🏷️ 版本 —（強制重新整理的分頁問不到；普通重整一次即顯示）";
+    else { ask(); setTimeout(() => { if (!got) el.textContent = "🏷️ 版本 —（讀不到，重整一次即顯示）"; }, 1500); }
+  }, 1600);
+})();

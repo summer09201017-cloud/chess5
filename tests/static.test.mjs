@@ -19,7 +19,7 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v19/);
+assert.match(serviceWorker, /gomoku-pwa-v20/);
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);
@@ -29,6 +29,9 @@ assert.match(script, /from "\.\/puzzles\.js"/);
 assert.match(script, /from "\.\/puzzle-solver\.js"/);
 assert.match(script, /from "\.\/daily-picker\.js"/);
 assert.match(script, /from "\.\/ai-engine\.js"/);
+/* 🏷 鐵則⑦ 兩件套(0906):詳細規則在 tests/vertag.test.mjs,這裡只守「還在」 */
+assert.match(index, /<details class="ver-fold">/);
+assert.match(index, /id="appVerBadge"/);
 /* 🧠 大師檔必須走引擎(0906):使用者照提示輸棋的病根就是提示用的大師只有淺搜。拿掉 engine:true 這條會紅。 */
 assert.match(script, /master:\s*\{[^\n]*engine:\s*true/);
 assert.match(script, /if \(config\.engine\) \{\s*\n\s*const m = chooseBestMove\(boardState, BOARD_SIZE, aiColor/);

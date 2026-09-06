@@ -4,6 +4,7 @@
  *
  *   node scripts/smoke-ai.mjs                          # 自己起本機靜態站(port 8766)
  *   BASE=https://5-chess.pages.dev/ node scripts/smoke-ai.mjs   # 線上
+ *   LEVEL=hard node scripts/smoke-ai.mjs                        # 困難檔(預設 master);兩檔都要跑一次
  *
  * 驗的是「人玩得到」不是「函式會動」(evaluate-not-click-guard):
  *   ① 選大師、人執黑,真的**點**交點落子 → 電腦在 2.5 秒內回一手(狀態列有「大師」字樣)
@@ -73,7 +74,10 @@ try {
   await page.goto(BASE + "?nocache=" + Date.now(), { waitUntil: "load" });
   await page.waitForSelector(".intersection");
   await page.selectOption("#modeSelect", "pve");
-  await page.selectOption("#aiLevel", "master");
+  const LEVEL = process.env.LEVEL || "master";
+  await page.selectOption("#aiLevel", LEVEL);
+  // 🧵 主執行緒有沒有凍:rAF 兩幀最大間隔(引擎搬進 Worker 前,大師一手會凍 ~0.9 秒)
+  await page.evaluate(() => { window.__maxGap = 0; let last = performance.now(); const tick = (t) => { window.__maxGap = Math.max(window.__maxGap, t - last); last = t; requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
   await page.check('input[name="playerColor"][value="black"]');
   await page.click("#resetBtn");
   await page.waitForTimeout(300);
@@ -84,7 +88,7 @@ try {
   let m = await humanMove(7, 7);
   (m.after === 2) ? ok("① 人落第一手後電腦回一手", `${m.dt}ms`) : bad("① 電腦沒回手", `子數 ${m.before}→${m.after}`);
   const st = await page.textContent("#status");
-  /大師|你/.test(st || "") ? ok("① 狀態列有在動", (st || "").trim()) : bad("① 狀態列", st);
+  /大師|困難|你/.test(st || "") ? ok(`① 狀態列有在動(${LEVEL})`, (st || "").trim()) : bad("① 狀態列", st);
 
   // ③ 提示:第一輪交換後、輪到人(黑)就按(★ 要在遊戲結束前按——首版把它排在最後,傻黑棋六手就被大師殺掉,gameOver 後提示本來就不作用)
   await page.click("#hintBtn");
@@ -111,6 +115,12 @@ try {
   }
   replied >= 2 ? ok("② 電腦連續回手", `${replied} 次${ended ? "(對局已分勝負)" : ""}`) : bad("② 電腦回手中斷", `${replied} 次`);
   !blackUnstoppable ? ok("② 黑亂下時電腦沒放任黑拿到擋不住的活四") : bad("② 電腦放任黑棋活三 → 活四", "大師不該讓這種事發生");
+
+  // ⑥ 🧵 引擎真的在 Worker 跑 + 主執行緒沒凍(rAF 最大間隔)—— ★ 一定要在 ⑤ 的 reload 之前讀:重載後模組重新初始化成 "sync"、__maxGap 歸零(0906 首跑就這樣假紅)
+  const engineMode = await page.evaluate(() => window.__aiEngineMode);
+  engineMode === "worker" ? ok("⑥ 引擎在 Web Worker 跑", engineMode) : bad("⑥ 引擎沒進 Worker(退回同步)", String(engineMode));
+  const maxGap = Math.round(await page.evaluate(() => window.__maxGap || 0));
+  maxGap < 400 ? ok("⑥ 電腦思考時主執行緒沒凍(rAF 最大間隔 < 400ms)", maxGap + "ms") : bad("⑥ 主執行緒有凍", maxGap + "ms");
 
   // ⑤ 🏷 版本號兩件套(鐵則⑦,0906):左欄簡歷版號 == sw;重整一次後右下徽章顯示同一版(SW 接管後才問得到)
   const swTxt = await page.evaluate(async () => { try { return await (await fetch("service-worker.js", { cache: "no-store" })).text(); } catch (_) { return ""; } });

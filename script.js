@@ -1,5 +1,5 @@
 import { analyzeForbiddenMove, analyzeMoveThreat } from "./game-rules.js";
-import { chooseBestMove } from "./ai-engine.js";   // 🧠 大師檔與 💡 提示的引擎(0906;純函式、零 DOM,借解題器的威脅空間搜尋)
+import { chooseBestMove, chooseDefensiveMove } from "./ai-engine.js";   // 🧠 大師/提示的引擎 + 困難檔的只守不攻入口(0906;純函式、零 DOM;實際在 ai-worker.js 裡跑)
 import { createTouchLens, paintBoardNeighborhood } from "./touch-lens.js";   // 🔍 手機觸控放大鏡(共用件,正本在 skills repo canvas-touch-targets/assets)
 import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
 import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
@@ -22,7 +22,9 @@ const STAR_PATTERNS = {
 const AI_LEVELS = {
   easy:    { label:"簡單",   topK:8,  randomTop:5, mistake:0.42, blockErr:0.20, lookahead:0, thinkDelay:[240,520] },
   normal:  { label:"普通",   topK:10, randomTop:3, mistake:0.15, blockErr:0.0,  lookahead:0, thinkDelay:[300,620] },
-  hard:    { label:"困難",   topK:12, randomTop:2, mistake:0.03, blockErr:0.0,  lookahead:1, thinkDelay:[360,760] },
+  /* 🛡 defend:true ⇒ 先問引擎「有沒有要守的」(成五/擋五/破連四/擋活三,最多 budgetMs);沒威脅才走下面的舊打分 + 故意犯錯。
+     0906 使用者拍板:「不會漏擋、但仍會犯錯」——孩子還是贏得了,只是不會再輸給「電腦眼睜睜看著活三不擋」。 */
+  hard:    { label:"困難",   topK:12, randomTop:2, mistake:0.03, blockErr:0.0,  lookahead:1, thinkDelay:[360,760], defend:true, budgetMs:400 },
   /* 🧠 engine:true ⇒ 走 ai-engine.js(成五/擋五/VCF/破 VCF/VCT/擋活三/深算 分層決策,每手最多 budgetMs)。
      其他三檔維持舊的「候選打分 + 淺搜 + 故意犯錯」,孩子才玩得贏;大師與 💡 提示要的是真的強。 */
   master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, thinkDelay:[420,900], engine:true, budgetMs:900 },
@@ -69,6 +71,8 @@ let currentPlayer = "black";
 let gameOver = false;
 let aiThinking = false;
 let aiTimer = null;
+let aiGen = 0;                 // 🧵 電腦這一手的世代:Worker 回來時世代不同(重開/換模式後)一律丟掉
+let hintBusy = false;          // 🧵 提示在 Worker 算的期間,再按不重算
 let mode = "pve";              // pve | pvp | online | puzzle | daily
 let humanColor = "black";
 let forbiddenOn = false;
@@ -508,22 +512,82 @@ function hintKey() {
 
 function showHint() {
   if (isPuzzleMode()) return puzzleShowHint();   // 解謎/每日的提示要用解題器的正解,不是對局 AI 的建議
-  if (gameOver || aiThinking) return;
+  if (gameOver || aiThinking || hintBusy) return;
 
   const key = hintKey();
-  let move = (hintCache && hintCache.key === key) ? hintCache : null;
+  if (hintCache && hintCache.key === key) { revealHint(hintCache); return; }
 
-  if (!move) {
-    move = chooseAiMove(AI_LEVELS.master, currentPlayer);
-    if (!move) { bubble("💡 找不到可以下的位置了"); return; }   // 三態:誠實說沒有
-    hintCache = { key, row: move.row, col: move.col, reason: move.reason || "" };
-  }
-
+  /* 🧵 引擎在 Worker 算(最多 ~0.9 秒),期間先出「思考中」;算完若盤面已變(人趁機下了一手)就丟掉不顯示。
+     Worker 不可用時 engineMoveAsync 會自己同步算;引擎回 null(盤滿)再退回舊路 chooseAiMove(AI_LEVELS.master, currentPlayer, true)。 */
+  hintBusy = true;
+  bubble("💡 思考中…", 4000);
+  engineMoveAsync("full", currentPlayer, { renjuBlack: forbiddenOn, timeBudgetMs: AI_LEVELS.master.budgetMs || 900 })
+    .then((m) => {
+      hintBusy = false;
+      if (gameOver || hintKey() !== key) return;
+      if (!m) m = chooseAiMove(AI_LEVELS.master, currentPlayer, true);
+      if (!m) { bubble("💡 找不到可以下的位置了"); return; }   // 三態:誠實說沒有
+      hintCache = { key, row: m.row, col: m.col, reason: m.reason || "" };
+      revealHint(hintCache);
+    })
+    .catch((e) => { hintBusy = false; console.error("[hint] failed:", e); bubble("💡 提示暫時算不出來，再按一次"); });
+}
+function revealHint(move) {
   const el = pointRefs[move.row][move.col];
   el.classList.add("hint-spot");
   setTimeout(() => el.classList.remove("hint-spot"), 1800);
   // 理由是引擎給的一句白話(「對手活三,必須擋」那種),讓人知道為什麼是這一點,不是只給座標
   bubble(`💡 建議：${coordLabel(move.row, move.col)}${move.reason ? `（${move.reason}）` : ""}`, 3400);
+}
+
+/* ---------- 8b. 🧵 引擎 Worker 橋(0906,使用者拍板「2 先做」) ----------
+   大師(full)與困難(defend)的引擎運算跑在 ai-worker.js(module worker),主執行緒不凍:轉棋盤、按鈕、天氣動畫照常。
+   建不起 Worker(舊瀏覽器 / file:)、Worker 出錯、或超過 預算+2.5 秒沒回 ⇒ 退回同步算(行為與搬進 Worker 之前一樣,只是會凍)。
+   回傳 Promise<move|null>:null = 引擎說沒有(full=盤滿 / defend=沒威脅),呼叫端自己決定退路。
+   window.__aiEngineMode 是測試掛勾("worker" / "sync"),scripts/smoke-ai.mjs 用它確認真的在 Worker 跑。 */
+let aiWorker = null, aiWorkerBroken = false, aiReqId = 0;
+const aiPending = new Map();
+window.__aiEngineMode = "sync";
+function engineSync(fn, color, opts) {
+  return fn === "defend" ? chooseDefensiveMove(boardState, BOARD_SIZE, color, opts) : chooseBestMove(boardState, BOARD_SIZE, color, opts);
+}
+function getAiWorker() {
+  if (aiWorkerBroken) return null;
+  if (aiWorker) return aiWorker;
+  try {
+    if (typeof Worker === "undefined" || location.protocol === "file:") { aiWorkerBroken = true; return null; }
+    aiWorker = new Worker(new URL("./ai-worker.js", import.meta.url), { type: "module" });
+    aiWorker.onmessage = (e) => {
+      const p = aiPending.get(e.data && e.data.id);
+      if (!p) return;
+      aiPending.delete(e.data.id);
+      clearTimeout(p.timer);
+      window.__aiEngineMode = "worker";
+      p.resolve(e.data.error ? undefined : e.data.move);   // undefined = 讓 engineMoveAsync 退回同步算
+    };
+    aiWorker.onerror = (err) => {
+      console.warn("[AI] worker 壞了,退回同步算:", err && err.message);
+      aiWorkerBroken = true;
+      for (const p of aiPending.values()) { clearTimeout(p.timer); p.resolve(undefined); }
+      aiPending.clear();
+      try { aiWorker.terminate(); } catch (_) { /* 已死 */ }
+      aiWorker = null;
+    };
+    return aiWorker;
+  } catch (_) {
+    aiWorkerBroken = true;
+    return null;
+  }
+}
+function engineMoveAsync(fn, color, opts) {
+  const w = getAiWorker();
+  if (!w) return Promise.resolve(engineSync(fn, color, opts));
+  return new Promise((resolve) => {
+    const id = ++aiReqId;
+    const timer = setTimeout(() => { if (aiPending.has(id)) { aiPending.delete(id); resolve(undefined); } }, (opts.timeBudgetMs || 900) + 2500);
+    aiPending.set(id, { resolve, timer });
+    w.postMessage({ id, fn, board: boardState, size: BOARD_SIZE, color, opts });
+  }).then((m) => (m === undefined ? engineSync(fn, color, opts) : m));
 }
 
 /* ---------- 9. AI ---------- */
@@ -534,37 +598,49 @@ function startAiTurn() {
   setAiThinking(true);
   updateStatus(`${playerLabel(currentPlayer)}（${config.label}）思考中...`);
   clearTimeout(aiTimer);
+  const gen = ++aiGen;
   const delay = randomInt(config.thinkDelay[0], config.thinkDelay[1]);
   aiTimer = setTimeout(() => {
-    try {
-      if (gameOver) { setAiThinking(false); return; }
-      const aiColor = currentPlayer;
-      let move = null;
+    if (gameOver) { setAiThinking(false); return; }
+    const aiColor = currentPlayer;
+    const finish = (move) => {
       try {
-        move = chooseAiMove(config, aiColor);
-      } catch (e) {
-        console.error("[AI] chooseAiMove threw:", e);
-      }
-      // 後備：暴力掃描第一個空位
-      if (!move) {
-        outer: for (let r = 0; r < BOARD_SIZE; r++) {
-          for (let c = 0; c < BOARD_SIZE; c++) {
-            if (!boardState[r][c]) { move = { row: r, col: c }; break outer; }
+        /* 🧵 Worker 回來時世界可能變了(重開、悔棋、換模式):世代不同 / 已不在思考 / 不是這一方的回合 ⇒ 這個答案作廢 */
+        if (gen !== aiGen || !aiThinking || gameOver || mode !== "pve" || currentPlayer !== aiColor) return;
+        // 後備:暴力掃描第一個空位
+        if (!move) {
+          outer: for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+              if (!boardState[r][c]) { move = { row: r, col: c }; break outer; }
+            }
           }
         }
+        setAiThinking(false);
+        if (!move) {
+          gameOver = true;
+          finalizeGame(null);
+          return;
+        }
+        const ok = commitMove(move.row, move.col, aiColor);
+        if (!ok) console.warn("[AI] commitMove failed for", move);
+      } catch (e) {
+        console.error("[AI] turn failed:", e);
+        setAiThinking(false);
+        updateStatus("⚠ 電腦回合發生錯誤，請按重新開始");
       }
-      setAiThinking(false);
-      if (!move) {
-        gameOver = true;
-        finalizeGame(null);
-        return;
-      }
-      const ok = commitMove(move.row, move.col, aiColor);
-      if (!ok) console.warn("[AI] commitMove failed for", move);
-    } catch (e) {
-      console.error("[AI] turn failed:", e);
-      setAiThinking(false);
-      updateStatus("⚠ 電腦回合發生錯誤，請按重新開始");
+    };
+    const legacy = (skipEngine) => {
+      try { return chooseAiMove(config, aiColor, skipEngine); }
+      catch (e) { console.error("[AI] chooseAiMove threw:", e); return null; }
+    };
+    if (config.engine || config.defend) {
+      /* 🧵 大師(engine)與困難(defend)先到 Worker 算;engineMoveAsync 失敗/超時會自己同步算。
+         defend 回 null = 沒威脅 ⇒ 走舊路(打分 + 故意犯錯,skipEngine 免得再同步算一次);engine 回 null = 盤滿 ⇒ finish 的後備掃描。 */
+      engineMoveAsync(config.engine ? "full" : "defend", aiColor, { renjuBlack: forbiddenOn, timeBudgetMs: config.budgetMs || (config.engine ? 900 : 400) })
+        .then((m) => finish(m || (config.engine ? null : legacy(true))))
+        .catch((e) => { console.error("[AI] engine failed:", e); finish(legacy(false)); });
+    } else {
+      finish(legacy(false));
     }
   }, delay);
 }
@@ -574,11 +650,18 @@ function setAiThinking(v) {
   intersections.style.pointerEvents = v ? "none" : "auto";
 }
 
-function chooseAiMove(config, aiColor) {
+function chooseAiMove(config, aiColor, skipEngine = false) {
   /* 🧠 大師檔與提示走引擎(0906):回 {row,col,reason};只有引擎回 null(盤滿)才落回下面的舊路。
-     由來:使用者照提示下棋輸了——舊的大師只擋「下一手成五」,看不見活三→活四連殺,也不會找自己的連續衝四。 */
-  if (config.engine) {
+     由來:使用者照提示下棋輸了——舊的大師只擋「下一手成五」,看不見活三→活四連殺,也不會找自己的連續衝四。
+     🧵 正常路徑引擎在 Worker 跑(startAiTurn / showHint 走 engineMoveAsync),這裡是同步退路;
+        skipEngine=true 表示引擎已經在 Worker 算過並回 null(defend=沒威脅 / full=盤滿),別再同步算一次。 */
+  if (!skipEngine && config.engine) {
     const m = chooseBestMove(boardState, BOARD_SIZE, aiColor, { renjuBlack: forbiddenOn, timeBudgetMs: config.budgetMs || 900 });
+    if (m) return m;
+  }
+  /* 🛡 困難檔:只守不攻——有威脅就照引擎的守法,沒威脅回 null 走下面的舊路(打分 + 故意犯錯) */
+  if (!skipEngine && config.defend) {
+    const m = chooseDefensiveMove(boardState, BOARD_SIZE, aiColor, { renjuBlack: forbiddenOn, timeBudgetMs: config.budgetMs || 400 });
     if (m) return m;
   }
   // Opening book: 第一手中央; 第二手鄰近

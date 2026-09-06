@@ -46,6 +46,11 @@
 - **2026-09-06 🏷 版本號兩件套(鐵則⑦;0906 全艦隊普查本站原列 🔴)**:左欄底 `details.ver-fold` 摺疊改版簡歷(v20→v1 白話、不跳號;v4~v1 上線前草稿版控無紀錄,寫成範圍)
   + 右下 `#appVerBadge` 問 SW 拿真版本、10 秒淡出(邏輯在 `script.js` 尾,`index.html` 維持無內嵌 JS)。`tests/vertag.test.mjs` 守 verTag==sw / 前幾版不跳號 / 帶日期 / CLAUDE.md 最新 SW vN 同版 / 徽章三件套 / script.js 不寫死版號。
   ★ **改版四處一起改:`service-worker.js` CACHE_NAME、`tests/static.test.mjs` 硬編版號、`index.html` verTag(summary + 本版一句 + 前幾版)、CLAUDE.md 這裡寫一條 SW vN**——漏一處 npm test 當場紅。SW **v20**。
+- **2026-09-06 🧵 引擎搬 Web Worker + 🛡 困難檔接防守層**(使用者拍板「兩個都做」;SW **v21**):
+  `ai-worker.js`(module worker,零邏輯殼)跑 `chooseBestMove` / `chooseDefensiveMove`;`script.js` 8b 節 `engineMoveAsync` 是橋——Worker 建不起 / 出錯 / 超時(預算+2.5s)一律退回同步算(行為同搬之前,只是會凍)。
+  `startAiTurn` 用世代號 `aiGen` + `aiThinking` 守「Worker 回來時世界變了就丟」;`showHint` 先出「思考中」再顯示,盤面變了就不顯示。
+  困難檔 `defend:true`:先問引擎守的那幾層(成五/擋五/破對手 VCF/擋活三・破對手 VCT,400ms),沒威脅回 null 走舊路(打分 + 3% 故意犯錯)⇒「不會漏擋、但仍會犯錯」;easy/normal 不准接(static.test 釘)。
+  smoke-ai ⑥:`window.__aiEngineMode === "worker"` + rAF 最大間隔 < 400ms(之前大師一手凍 ~0.9 秒);`LEVEL=hard` 再跑一次。
 
 ### 待做
 見 `roadmap.md`。
@@ -57,18 +62,19 @@
 | `index.html` | 版面骨架、左側控制面板、`<dialog>`。**無內嵌 JS** |
 | `style.css` | 全部樣式。棋盤幾何在 `.board-3d` / `.grid-line` / `.intersection` / `.stone` |
 | `script.js` | 遊戲主體(ES module):建盤、落子、AI、計時、線上、PWA 註冊 |
-$1
+| `game-rules.js` | 純函式規則(禁手判定、威脅分析),對局 AI 用 |
 | `ai-engine.js` | 對局引擎(純函式、零 DOM):**大師檔與 💡 提示**用。分層決策(成五/擋五/VCF/破 VCF/VCT/擋活三/深算),戰術層 import `puzzle-solver.js`;回 `{row,col,reason}`,reason 給氣泡念 |
+| `ai-worker.js` | 引擎的 Web Worker 殼(module worker,零邏輯):收 `{id,fn,board,size,color,opts}` 回 `{id,move,error}`。**要進 SW CORE_ASSETS 與 stage SITE_FILES** |
 | `puzzle-solver.js` | 殘局解題器(純函式、零 DOM):威脅空間搜尋 / VCF。生成、測試、瀏覽器端判定**同一支** |
 | `puzzles.js` | 殘局題庫(**自動產生,不要手改**;改 `scripts/gen-puzzles.mjs` 再 `npm run puzzles` / 補題 `npm run puzzles:more -- <seed>`)。含 `PUZZLE_META.runs` 生成歷史 |
 | `daily-picker.js` | 每日挑戰抽題(純函式):本地日期 → FNV → 三段階梯各抽一題,全世界同一組 |
-| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js / daily-picker.js / ai-engine.js |
+| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js / daily-picker.js / ai-engine.js / ai-worker.js |
 | `scripts/gen-puzzles.mjs` | 題庫生成器:自我對弈 → 解題器證明 → 分級挑題 → 寫 puzzles.js(種子+局數決定,可重現) |
 | `scripts/smoke-puzzles.mjs` | 解謎流程真瀏覽器冒煙(Playwright,借 Desktop/hfpc-sparks-hub 的;不在 npm test 裡) |
-$1
+| `scripts/smoke-resume.mjs` | 接續上一盤真瀏覽器冒煙(15 項;同樣借 Playwright、不在 npm test 裡)。**動 `replaying` / `commitMove` / 開機序列就要跑它** |
 | `scripts/smoke-ai.mjs` | 大師檔 + 💡 提示真瀏覽器冒煙(8 項;自己起 127.0.0.1:8766,`BASE=` 可打線上;借 Playwright、不在 npm test 裡)。**動 `ai-engine.js` / `chooseAiMove` / `showHint` 就要跑它** |
 | `scripts/ai-bench.mjs` | 新引擎 vs 舊大師對打(舊 `chooseAiMove` master 檔逐行搬進去當基準)。改了引擎手跑一次、結果記進 HANDOFF;不在 npm test 裡(一局幾十秒) |
-$1`ai-engine.test.mjs`(引擎戰術 24 項,解題器當裁判)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `daily-picker.test.mjs`(每日抽題掃 400 天)+ `static.test.mjs`(靜態字串) |
+| `tests/` | `game-rules.test.mjs`(規則)+ `ai-engine.test.mjs`(引擎戰術 24 項,解題器當裁判)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `daily-picker.test.mjs`(每日抽題掃 400 天)+ `static.test.mjs`(靜態字串) |
 
 棋盤座標的單一真相:`script.js` 的 `ratioAtIndex()` / `CELL_RATIO` / `MARGIN_RATIO` / `HOTSPOT_RATIO`。
 
@@ -157,7 +163,9 @@ npm run verify        # lint + 單元測試(必須綠)
 # 動了 replaying / commitMove / 開機序列 / localStorage 讀寫 → 一定要再跑真瀏覽器冒煙:
 python -m http.server 8765 --bind 127.0.0.1      # 另一個視窗
 node scripts/smoke-resume.mjs                    # 接續上一盤(15 項)
-$1node scripts/smoke-ai.mjs                        # 大師檔+提示(8 項;自己起 8766,不必先開 http.server)
+node scripts/smoke-puzzles.mjs                   # 解謎流程(23 項)
+node scripts/smoke-ai.mjs                        # 大師檔+提示+兩件套+Worker(自己起 8766,不必先開 http.server)
+LEVEL=hard node scripts/smoke-ai.mjs             # 困難檔再跑一次(防守層)
 npm run bench:ai                                 # 動了 ai-engine.js → 新引擎 vs 舊大師 6 局,結果記進 HANDOFF
 ```
 ★★ **`npm run verify` 綠 ≠ 開得起來。** `script.js` 與 DOM 耦合、單元測試載不進去,

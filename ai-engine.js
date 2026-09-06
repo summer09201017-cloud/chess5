@@ -212,24 +212,38 @@ class Deep {
 }
 
 /**
- * 主入口。board 會被暫時改動、一定還原(無例外路徑)。
+ * 主入口(大師檔 / 💡 提示)。board 會被暫時改動、一定還原(無例外路徑)。
  * @returns {{row:number,col:number,reason:string}|null}  null = 沒有可走的點
  */
 export function chooseBestMove(board, size, color, options = {}) {
-  const opts = { ...ENGINE_DEFAULTS, ...options };
+  return decide(board, size, color, { ...ENGINE_DEFAULTS, ...options }, "full");
+}
+
+/**
+ * 只守不攻(困難檔用,0906 使用者拍板):①成五 ②擋五 ④破對手 VCF ⑥擋活三 / 破對手 VCT——**有威脅才回一手**;
+ * 沒有威脅回 null ⇒ 呼叫端走自己原本的路(舊打分 + 故意犯錯)。結果是「不會漏擋、但仍會犯錯」,孩子還是贏得了。
+ * 預算預設 400ms(比大師短:它只跑守的那幾層)。
+ */
+export function chooseDefensiveMove(board, size, color, options = {}) {
+  return decide(board, size, color, { ...ENGINE_DEFAULTS, timeBudgetMs: 400, ...options }, "defend");
+}
+
+function decide(board, size, color, opts, mode) {
+  const full = mode === "full";
   const t0 = Date.now();
   const deadline = t0 + opts.timeBudgetMs;
   const timeLeft = () => deadline - Date.now();
   const me = color, op = other(color);
   const legal = makeLegal(board, size, opts.renjuBlack);
-  const attackOk = !(opts.renjuBlack && me === "black");   // 黑+禁手:解題器的證明可能靠禁手點,不拿來攻
+  const attackOk = full && !(opts.renjuBlack && me === "black");   // 黑+禁手:解題器的證明可能靠禁手點,不拿來攻;defend 模式本來就不攻
   const out = (m, reason) => ({ row: m[0], col: m[1], reason });
 
-  /* 開局 */
+  /* 開局(只有 full;defend 沒東西可守,回 null 讓舊路開局) */
   const stones = countStones(board, size);
   const mid = Math.floor(size / 2);
-  if (stones === 0) return legal(mid, mid, me) ? out([mid, mid], "開局取天元") : null;
-  if (stones === 1) {
+  if (stones <= 1) {
+    if (!full) return null;
+    if (stones === 0) return legal(mid, mid, me) ? out([mid, mid], "開局取天元") : null;
     let first = null;
     for (let r = 0; r < size && !first; r++) for (let c = 0; c < size; c++) if (board[r][c] !== null) { first = [r, c]; break; }
     const opts8 = [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 1], [0, -1], [1, 0], [-1, 0]]
@@ -253,7 +267,7 @@ export function chooseBestMove(board, size, color, options = {}) {
     }
   }
 
-  /* ③ 自己的 VCF */
+  /* ③ 自己的 VCF(只有 full) */
   if (attackOk && timeLeft() > opts.timeBudgetMs * 0.35) {
     const r = solve(board, size, me, opts.vcfDepth, { vcfOnly: true, budget: opts.vcfBudget, deadline });
     if (r.depth != null && r.move && legal(r.move[0], r.move[1], me)) return out(r.move, `連續衝四,${r.depth} 手內必勝`);
@@ -283,7 +297,7 @@ export function chooseBestMove(board, size, color, options = {}) {
     }
   }
 
-  /* ⑤ 自己的 VCT(含活三) */
+  /* ⑤ 自己的 VCT(含活三;只有 full) */
   if (!restricted && attackOk && timeLeft() > opts.timeBudgetMs * 0.45) {
     const r = solve(board, size, me, opts.vctDepth, { budget: opts.vctBudget, deadline });
     if (r.depth != null && r.move && legal(r.move[0], r.move[1], me)) return out(r.move, `活三連殺,${r.depth} 手內必勝`);
@@ -310,7 +324,7 @@ export function chooseBestMove(board, size, color, options = {}) {
         if (isWinAt(board, size, m.r, m.c, me)) ok = true;
         else {
           const again = solve(board, size, op, theirs.depth + 1, { budget: 40000, deadline });
-          ok = again.depth == null && !again.aborted;   // 預算用完(aborted)= 證不了有破 → 不算破(首版寫成 depth==null 就算,把沒破的點當破了)
+          ok = again.depth == null && !again.aborted;   // 預算用完(aborted)= 證不了有破 → 不算破
         }
         board[m.r][m.c] = null;
         if (ok) saves.push([m.r, m.c]);
@@ -319,11 +333,15 @@ export function chooseBestMove(board, size, color, options = {}) {
     }
   }
 
+  /* defend 模式:沒有任何威脅 ⇒ 交回呼叫端的舊路 */
+  if (!full && !restricted) return null;
+
   /* ⑦ 深算 */
   const pool = restricted || nearEmpty(board, size, 2);
   let cands = ranked(board, size, me, pool, legal, opts.rootWidth);
-  if (!cands.length) cands = ranked(board, size, me, nearEmpty(board, size, 3), legal, opts.rootWidth);
+  if (!cands.length && full) cands = ranked(board, size, me, nearEmpty(board, size, 3), legal, opts.rootWidth);
   if (!cands.length) {
+    if (!full) return null;
     for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (legal(r, c, me)) return out([r, c], "只剩這裡能下");
     return null;
   }

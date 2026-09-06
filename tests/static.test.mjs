@@ -19,12 +19,13 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v20/);
+assert.match(serviceWorker, /gomoku-pwa-v21/);
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);
 assert.match(serviceWorker, /"\.\/daily-picker\.js"/);
-assert.match(serviceWorker, /"\.\/ai-engine\.js"/);   // 🧠 少了它 cache.addAll 不會失敗,但離線時大師/提示會 import 不到而整支 script.js 掛掉
+assert.match(serviceWorker, /"\.\/ai-engine\.js"/);
+assert.match(serviceWorker, /"\.\/ai-worker\.js"/);   // 🧵 離線時 new Worker 抓不到 = 退回同步算(不壞但會凍),所以要進快取   // 🧠 少了它 cache.addAll 不會失敗,但離線時大師/提示會 import 不到而整支 script.js 掛掉
 assert.match(script, /from "\.\/puzzles\.js"/);
 assert.match(script, /from "\.\/puzzle-solver\.js"/);
 assert.match(script, /from "\.\/daily-picker\.js"/);
@@ -34,7 +35,13 @@ assert.match(index, /<details class="ver-fold">/);
 assert.match(index, /id="appVerBadge"/);
 /* 🧠 大師檔必須走引擎(0906):使用者照提示輸棋的病根就是提示用的大師只有淺搜。拿掉 engine:true 這條會紅。 */
 assert.match(script, /master:\s*\{[^\n]*engine:\s*true/);
-assert.match(script, /if \(config\.engine\) \{\s*\n\s*const m = chooseBestMove\(boardState, BOARD_SIZE, aiColor/);
+assert.match(script, /if \(!skipEngine && config\.engine\) \{\s*\n\s*const m = chooseBestMove\(boardState, BOARD_SIZE, aiColor/);
+/* 🛡 困難檔接防守層(0906 使用者拍板):hard 要 defend:true;其餘兩檔(easy/normal)不准接 —— 孩子要玩得贏 */
+assert.match(script, /hard:\s*\{[^\n]*defend:\s*true/);
+assert.doesNotMatch(script, /(easy|normal):\s*\{[^\n]*(engine|defend):\s*true/);
+/* 🧵 引擎在 module worker 跑;失敗要有同步退路 */
+assert.match(script, /new Worker\(new URL\("\.\/ai-worker\.js", import\.meta\.url\), \{ type: "module" \}\)/);
+assert.match(script, /m === undefined \? engineSync\(fn, color, opts\) : m/);
 // 解謎面板四顆鈕 + 進度行(2026-09-02 重做:步數限制、最強防守、答錯判負可重試、分級與進度)
 for (const id of ["puzzleSelect", "puzzleStart", "puzzleNext", "puzzleHintBtn", "puzzleShare", "puzzleProgress", "puzzleHint", "puzzleStars"]) {
   assert.match(index, new RegExp(`id="${id}"`), `index.html 缺 #${id}`);
@@ -61,7 +68,7 @@ assert.match(script, /if \(replayIndex !== null \|\| isPuzzleMode\(\)\) return;/
    hard 是 { randomTop: 2, mistake: 0.03 } ⇒ 從前兩名隨機挑(按兩次會跳針)、
    而且有 3% 機率**故意**挑一步更差的。對手該不該犯錯是難度設計,提示不該 ——
    提示是玩家問「最好怎麼走」的答案。這一條就是釘死不准改回去。 */
-assert.match(script, /chooseAiMove\(AI_LEVELS\.master, currentPlayer\)/);
+assert.match(script, /chooseAiMove\(AI_LEVELS\.master, currentPlayer(, true)?\)/);
 assert.doesNotMatch(script, /const config = AI_LEVELS\.hard;\s*\n\s*const move = chooseAiMove/);
 // 同局面按兩次要回同一手 ⇒ 一定要有快取那條路
 assert.match(script, /hintCache && hintCache\.key === key/);

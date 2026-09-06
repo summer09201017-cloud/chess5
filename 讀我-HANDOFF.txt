@@ -1,7 +1,25 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06(agape250 機・Fable 5.1:🏷 版本號兩件套 + 🧠 大師檔/提示換引擎 ai-engine.js;SW v20)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06(agape250 機・Fable 5.1:🧵 引擎搬 Worker + 🛡 困難檔防守層 + 🏷 兩件套 + 🧠 引擎;SW v21)
                                      前一版:2026-09-05(📊 接 play-stats 三層 + 🔍 觸控放大鏡;SW v17)
 ================================================================================
+
+★★★★★ 2026-09-06 下午③(agape250 機・Fable 5.1・take-over 場)🧵 引擎搬 Web Worker + 🛡 困難檔接防守層 —— SW v20 → v21 ★★★★★
+  由來:使用者聽完 1(困難檔接防守層)與 2(Web Worker)的白話利弊,拍板「兩個都做」。
+  ① 🛡 困難檔:ai-engine.js 主入口拆成 decide(mode)——chooseBestMove = full(大師/提示,原樣)、新 export chooseDefensiveMove = defend:
+     只跑 ①成五 ②擋五 ④破對手 VCF ⑥擋活三/破對手 VCT,有威脅才回一手,沒威脅回 null ⇒ 呼叫端走舊路(打分 + 3% 故意犯錯)。預算 400ms。
+     AI_LEVELS.hard 加 defend:true / budgetMs:400;easy / normal 一字不動(static.test 釘「不准接」)。tests/ai-engine.test.mjs 加 ⑥ 七項(沒威脅回 null / 擋活三 / 成五 / 擋四 / 開局不插手)。
+  ② 🧵 Worker:新檔 ai-worker.js(module worker,零邏輯殼);script.js 8b 節 engineMoveAsync(fn, color, opts) → Promise<move|null>:
+     建不起 Worker(舊瀏覽器 / file:)、onerror、或 預算+2.5 秒沒回 ⇒ 退回同步 engineSync(行為同搬之前);window.__aiEngineMode 測試掛勾。
+     startAiTurn 改成 finish(move) 回呼 + 世代號 aiGen:Worker 回來時 gen 不同 / !aiThinking / 不是這一方回合 ⇒ 作廢(重開、換模式後不會冒出一手舊棋)。
+     showHint 改 async:先出「💡 思考中…」,算完若 hintKey 變了(人趁機下了一手)就不顯示;hintBusy 防連按。static.test 的兩條 regex 跟著改(skipEngine / , true)。
+     ⚠ 引擎回 null 的兩種意思要分開:full=盤滿 → finish 的後備掃描;defend=沒威脅 → legacy(skipEngine=true) 別再同步算一次。
+  ③ SW v21 + CORE_ASSETS / stage SITE_FILES 加 ai-worker.js(離線時 new Worker 抓不到 = 退回同步,不壞但會凍)。verTag v21 一句 + 前幾版 v20。
+  驗:npm run verify 全綠(ai-engine 31 項)・scripts/smoke-ai.mjs(預設 master)與 LEVEL=hard 各一次,本機+線上:⑥ __aiEngineMode="worker"、rAF 最大間隔 < 400ms(搬之前大師一手凍 ~0.9 秒)・線上 sw gomoku-pwa-v21、/ai-worker.js 200。
+  ⚠ 冒煙腳本首版把 ⑥ 排在 ⑤ 的 reload 之後 ⇒ 重載後模組重新初始化成 "sync" ⇒ 假紅;⑥ 要在 reload 前讀。
+  ⚠⚠ 補丁工具的坑(這一輪最貴的):我的 patch 幫手把字串取代包成 s.replace(re, () => b),**function replacer 不展開 $1**,
+     於是 CLAUDE.md / README / roadmap / 本檔好幾行被寫成字面「$1」、被吃掉的原文(表格列、標題)得從 git 撈回來。
+     ⇒ 規則:regex 取代要展開 $n 就傳字串 s.replace(re, str);要保留字面就用 split/join。已記進 silent-failure-patterns §56。
+  📋 下一手若要更強:Worker 已就位,把 AI_LEVELS.master.budgetMs 從 900 拉到 2000 也不會卡畫面(先問使用者要不要)。
 
 ★★★★★ 2026-09-06 下午②(agape250 機・Fable 5.1・take-over 場)🏷 版本號兩件套(鐵則⑦)—— SW v19 → v20 ★★★★★
   由來:0906 全艦隊普查本站 🔴(沒有版本號徽章與改版簡歷);使用者接著引擎那件點名「開工」。
@@ -12,7 +30,7 @@
       static.test 加「兩件套還在」;scripts/smoke-ai.mjs 加 ⑤:簡歷版號 == sw、重整後徽章真的顯示「版本 v20(這台裝置實際執行中的版本)」。
   ★ 改版從此四處一起改:service-worker.js CACHE_NAME、tests/static.test.mjs 硬編版號、index.html verTag、CLAUDE.md 現況一條 SW vN(地雷 4 已補這句)。
 
-$1 大師檔 + 💡 提示換引擎 ai-engine.js —— SW v17 → v18 → v19 ★★★★★
+★★★★★ 2026-09-06(agape250 機・Fable 5.1・take-over 場)🧠 大師檔 + 💡 提示換引擎 ai-engine.js —— SW v17 → v18 → v19 ★★★★★
   由來:使用者手機上原話「五子棋的 ai 提示,ai 太弱了,因我照 ai 提示去下棋,結果就輸了,請加強 ai」。
   病根:提示 = chooseAiMove(AI_LEVELS.master),而大師只是候選點打分 + 3 層淺搜(radius 1、top 8、static eval):
        只擋「下一手就成五」,看不見對手活三→活四的連環殺,也不會找自己的連續衝四 ⇒ 照它下,對手一個三三/四三就輸。
@@ -33,7 +51,8 @@ $1 大師檔 + 💡 提示換引擎 ai-engine.js —— SW v17 → v18 → v19 �
   ⚠ 冒煙腳本首版把「按提示」排在最後,傻黑棋六手就被大師殺掉、gameOver 後提示本來就不作用 ⇒ 假紅三項;改成第一輪交換後就按。
   📋 待使用者拍板:①困難檔要不要接引擎的防守層(不會漏擋、仍會犯錯)②引擎搬 Web Worker(現在每手最多凍主執行緒 ~0.9 秒)③本站還沒有版本號徽章/改版簡歷(鐵則⑦,0906 普查 🔴)。
 
-$1  由來:十二站健檢時本站是唯一沒接統計的(0905 全艦隊覆蓋率掃描列在 🔴 十站),使用者拍板「所有作品一律接統計」+ 第 1 層九件開工。
+★★★★★ 2026-09-05(HFP 機・Fable 5.1・0904-fb)📊 接統計 + 🔍 觸控放大鏡 —— SW v15 → v16 → v17 ★★★★★
+  由來:十二站健檢時本站是唯一沒接統計的(0905 全艦隊覆蓋率掃描列在 🔴 十站),使用者拍板「所有作品一律接統計」+ 第 1 層九件開工。
   ① v16(354f00f)📊 play-stats 三層:index.html 開啟一發 + 開頁到第一次離開一發 -dwell(3~1800 秒;遊戲語意,照 play-stats-dwell 鐵則);
      script.js finalizeGame 在 `if (replaying) return` **之後**送 -done 帶本局秒數(resetGame 記 window.__matchT0)⇒ 重播/匯入/分享載入的棋不算完局。
      本機 localhost/127.0.0.1 靜默跳過。worker NAMES 顯示名「3D 五子棋」(0904-96 補)。

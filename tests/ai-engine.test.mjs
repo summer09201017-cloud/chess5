@@ -4,7 +4,7 @@
 //   成五不下 / 該擋不擋 / 看不見連續衝四 / 看不見活三連殺 / 對手活三不擋 / 黑棋禁手照走。
 //   每一條都用解題器(puzzle-solver)當裁判——它是被 84 題證明過的,不是用引擎自己驗自己。
 import assert from "node:assert/strict";
-import { chooseBestMove, evaluate } from "../ai-engine.js";
+import { chooseBestMove, chooseDefensiveMove, evaluate } from "../ai-engine.js";
 import { createBoard, isWinAt, solve, winningFirstMoves, defenderOptions } from "../puzzle-solver.js";
 import { analyzeForbiddenMove } from "../game-rules.js";
 
@@ -172,6 +172,32 @@ console.log("── ⑤ 速度與穩定 ──");
   ok("空盤評估 = 0", evaluate(b, 15, "black") === 0);
   const t = boardFrom([E, E, E, E, E, E, E, row("......XXX"), E, E, E, E, E, E, E]);
   ok("黑活三:黑視角 > 0、白視角 < 0", evaluate(t, 15, "black") > 0 && evaluate(t, 15, "white") < 0, evaluate(t, 15, "black") + " / " + evaluate(t, 15, "white"));
+}
+
+console.log("── ⑥ 只守不攻(困難檔 defend)──");
+{
+  const quiet = boardFrom([E, E, E, E, E, E, E, row(".......X"), row("......O"), E, E, E, E, E, E]);
+  const q = snap(quiet);
+  const m0 = chooseDefensiveMove(quiet, 15, "black", { timeBudgetMs: 400 });
+  ok("沒威脅時回 null(困難檔走自己的舊路)", m0 === null, JSON.stringify(m0));
+  ok("盤面沒被改壞", snap(quiet) === q);
+  // 白有活三,黑要走 ⇒ 要回一手擋住
+  const t = boardFrom([E, E, E, E, E, E, E, row("......OOO"), row("..X"), row("............X"), E, E, E, E, E]);
+  const d = chooseDefensiveMove(t, 15, "black", { timeBudgetMs: 400 });
+  ok("對手活三 ⇒ 回一手", !!d && t[d.row][d.col] === null, JSON.stringify(d));
+  if (d) { t[d.row][d.col] = "black"; const od = defenderOptions(t, 15, "white"); t[d.row][d.col] = null; ok("擋完白沒有成活四點", od.kind !== "threat", od.kind + " " + (d.reason || "")); }
+  // 自己有四 ⇒ 成五(守的入口也要會贏)
+  const w = boardFrom([E, E, E, E, E, E, E, row("...XXXX"), row("..OO..O"), row("..O"), E, E, E, E, E]);
+  const f = chooseDefensiveMove(w, 15, "black", { timeBudgetMs: 400 });
+  if (f) w[f.row][f.col] = "black";
+  ok("自己能成五就成五", !!f && isWinAt(w, 15, f.row, f.col, "black"), JSON.stringify(f));
+  // 對手有四 ⇒ 擋
+  const g = boardFrom([E, E, E, E, E, E, E, row("..XOOOO"), row("..X"), row(".........X"), E, E, E, E, E]);
+  const b = chooseDefensiveMove(g, 15, "black", { timeBudgetMs: 400 });
+  ok("對手有四 ⇒ 擋在 (7,7)", !!b && b.row === 7 && b.col === 7, JSON.stringify(b));
+  // 開局(≤1 子)不插手
+  const o = boardFrom([E, E, E, E, E, E, E, row(".......X"), E, E, E, E, E, E, E]);
+  ok("開局(1 子)回 null", chooseDefensiveMove(o, 15, "white", { timeBudgetMs: 400 }) === null);
 }
 
 console.log(`\nai-engine: ${pass} 綠 / ${fail} 紅`);

@@ -1,10 +1,30 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-05(HFP 機・Fable 5.1:📊 接 play-stats 三層 + 🔍 觸控放大鏡;SW v17)
-                                     前一版:2026-09-04(♟ 接續上一盤 + 修掉「載入棋譜偷加勝場」的計分污染;SW v15)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06(agape250 機・Fable 5.1:🧠 大師檔 + 💡 提示換引擎 ai-engine.js;SW v19)
+                                     前一版:2026-09-05(📊 接 play-stats 三層 + 🔍 觸控放大鏡;SW v17)
 ================================================================================
 
-★★★★★ 2026-09-05(HFP 機・Fable 5.1・0904-fb)📊 接統計 + 🔍 觸控放大鏡 —— SW v15 → v16 → v17 ★★★★★
-  由來:十二站健檢時本站是唯一沒接統計的(0905 全艦隊覆蓋率掃描列在 🔴 十站),使用者拍板「所有作品一律接統計」+ 第 1 層九件開工。
+★★★★★ 2026-09-06(agape250 機・Fable 5.1・take-over 場)🧠 大師檔 + 💡 提示換引擎 ai-engine.js —— SW v17 → v18 → v19 ★★★★★
+  由來:使用者手機上原話「五子棋的 ai 提示,ai 太弱了,因我照 ai 提示去下棋,結果就輸了,請加強 ai」。
+  病根:提示 = chooseAiMove(AI_LEVELS.master),而大師只是候選點打分 + 3 層淺搜(radius 1、top 8、static eval):
+       只擋「下一手就成五」,看不見對手活三→活四的連環殺,也不會找自己的連續衝四 ⇒ 照它下,對手一個三三/四三就輸。
+  做法:新檔 ai-engine.js(純函式、零 DOM),分層決策——①成五 ②擋五 ③自己的 VCF ④破對手 VCF ⑤自己的 VCT(含活三)⑥擋活三/破對手 VCT ⑦alpha-beta 疊代加深。
+       ③④⑤⑥ 直接借 puzzle-solver.js 的威脅空間搜尋(84 題證明過的那支,不另寫一套);⑦ 用線型字串評估(五/活四/四/活三/跳三/…,依序比對、比對到的字元換 x 不重複計分)。
+       回 {row,col,reason},提示氣泡念理由:「對手活三,必須擋或反衝四」「連續衝四,3 手內必勝」「往後算了 4 手」。
+       script.js 只改三處:import、AI_LEVELS.master 加 engine:true / budgetMs:900、chooseAiMove 開頭 if (config.engine) 走引擎;showHint 氣泡帶理由(3.4 秒)。
+       ★ 簡單/普通/困難三檔一個字沒動——孩子要玩得贏;大師與提示要的是真的強。static.test 釘死 master 必須 engine:true。
+  ⚠ 黑棋開禁手時引擎**不用**③⑤攻擊層:解題器的證明是自由規則的,黑的必勝線可能踩禁手點;守的那半(白沒禁手)照用。候選一律過 analyzeForbiddenMove。
+  ⚠ 時間預算:v18(首版引擎)的 solve 只有節點預算,bench 引擎執白時平均一手 1.5~1.8 秒(預算 250ms)⇒ v19:puzzle-solver.js 加 opts.deadline
+       (每 256 節點看一次錶,超時丟 ABORT → aborted:true),引擎每次 solve 都帶。**這是 puzzle-solver 唯一的改動,不帶 deadline 時行為逐位元相同(84 題重證照綠)。** v18 上線 8 分鐘後被 v19 蓋掉。
+  驗:npm run verify 全綠(新 tests/ai-engine.test.mjs 24 項:天元/成五/擋五/雙四/三三 VCT/擋活三/拆三三/禁手/速度/評估,解題器當裁判);
+      scripts/ai-bench.mjs 新引擎 vs 舊大師(舊 chooseAiMove master 逐行搬進 bench 當基準)**6:0**(引擎每手 900ms=線上設定,平均 203~303ms/手;預算壓到 250ms 時 5:1、平均 82~137ms);
+      scripts/smoke-ai.mjs 真瀏覽器 8 項本機+線上全綠(電腦 0.4~0.8 秒回手、提示氣泡「建議:G7(往後算了 4 手)」、亮的是空點、零 console error);
+      線上 https://5-chess.pages.dev/service-worker.js = gomoku-pwa-v19、/ai-engine.js 200 有 chooseBestMove、/puzzle-solver.js 有 this.deadline。
+  ⚠ 測試設計踩的坑(留給下一手):我手擺的「白破三三」題其實白已必敗——解題器掃過白每一點,黑都仍 ≤5 手必勝;測試改守「至少把 3 手殺拆成 5 手」。
+       手擺棋局的直覺錯誤率就是這麼高(CLAUDE.md 地雷 7 同款),**判斷一律交給解題器,不要相信自己看的**。
+  ⚠ 冒煙腳本首版把「按提示」排在最後,傻黑棋六手就被大師殺掉、gameOver 後提示本來就不作用 ⇒ 假紅三項;改成第一輪交換後就按。
+  📋 待使用者拍板:①困難檔要不要接引擎的防守層(不會漏擋、仍會犯錯)②引擎搬 Web Worker(現在每手最多凍主執行緒 ~0.9 秒)③本站還沒有版本號徽章/改版簡歷(鐵則⑦,0906 普查 🔴)。
+
+$1  由來:十二站健檢時本站是唯一沒接統計的(0905 全艦隊覆蓋率掃描列在 🔴 十站),使用者拍板「所有作品一律接統計」+ 第 1 層九件開工。
   ① v16(354f00f)📊 play-stats 三層:index.html 開啟一發 + 開頁到第一次離開一發 -dwell(3~1800 秒;遊戲語意,照 play-stats-dwell 鐵則);
      script.js finalizeGame 在 `if (replaying) return` **之後**送 -done 帶本局秒數(resetGame 記 window.__matchT0)⇒ 重播/匯入/分享載入的棋不算完局。
      本機 localhost/127.0.0.1 靜默跳過。worker NAMES 顯示名「3D 五子棋」(0904-96 補)。

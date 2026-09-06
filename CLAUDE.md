@@ -11,7 +11,7 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-04)
+## 現況(2026-09-06)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
@@ -37,6 +37,13 @@
   - **0904 接續上一盤**:`gomoku.session` 補上讀取半邊(⟳ 鈕,只有真的有棋局可接時才出現)
     + 修掉「載入已下完的棋譜會偷加勝場」的計分污染 + 開機狀態列說謊。SW **v15**。見地雷 14/16
 
+- **2026-09-06 大師檔 + 💡 提示換引擎 `ai-engine.js`**(使用者原話「AI 提示太弱了,照提示下結果輸了,請加強 AI」):
+  分層決策 成五 → 擋五 → 連續衝四必勝(VCF)→ 破對手 VCF → 活三連殺(VCT)→ 擋活三 / 破連殺 → alpha-beta 疊代加深;
+  戰術層直接借 `puzzle-solver.js` 的威脅空間搜尋(84 題證明過的那支),每手時間預算 900ms(解題器為此加了 `opts.deadline`,不帶時行為不變)。
+  提示氣泡會念理由(「對手活三,必須擋或反衝四」「往後算了 4 手」)。**簡單/普通/困難三檔一個字沒動**(孩子要玩得贏)。
+  `tests/ai-engine.test.mjs` 24 項戰術題(解題器當裁判)・`scripts/ai-bench.mjs` 新引擎 vs 舊大師 **6:0**(引擎每手 900ms=線上設定,平均 203~303ms/手;預算壓到 250ms 時 5:1、平均 82~137ms)・`scripts/smoke-ai.mjs` 真瀏覽器 8 項(本機+線上)。SW **v19**(v18 是首版引擎、8 分鐘後被 v19 蓋掉:解題器加 deadline)。
+  ⚠ 黑棋開禁手時引擎不用攻擊層(解題器是自由規則,黑的必勝線可能踩禁手點),守的那半照用;候選一律過 `analyzeForbiddenMove`。
+
 ### 待做
 見 `roadmap.md`。
 
@@ -47,15 +54,18 @@
 | `index.html` | 版面骨架、左側控制面板、`<dialog>`。**無內嵌 JS** |
 | `style.css` | 全部樣式。棋盤幾何在 `.board-3d` / `.grid-line` / `.intersection` / `.stone` |
 | `script.js` | 遊戲主體(ES module):建盤、落子、AI、計時、線上、PWA 註冊 |
-| `game-rules.js` | 純函式規則(禁手判定、威脅分析),對局 AI 用 |
+$1
+| `ai-engine.js` | 對局引擎(純函式、零 DOM):**大師檔與 💡 提示**用。分層決策(成五/擋五/VCF/破 VCF/VCT/擋活三/深算),戰術層 import `puzzle-solver.js`;回 `{row,col,reason}`,reason 給氣泡念 |
 | `puzzle-solver.js` | 殘局解題器(純函式、零 DOM):威脅空間搜尋 / VCF。生成、測試、瀏覽器端判定**同一支** |
 | `puzzles.js` | 殘局題庫(**自動產生,不要手改**;改 `scripts/gen-puzzles.mjs` 再 `npm run puzzles` / 補題 `npm run puzzles:more -- <seed>`)。含 `PUZZLE_META.runs` 生成歷史 |
 | `daily-picker.js` | 每日挑戰抽題(純函式):本地日期 → FNV → 三段階梯各抽一題,全世界同一組 |
-| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js / daily-picker.js |
+| `service-worker.js` | PWA 快取。`CACHE_NAME` **改任何殼層檔就要 bump**;`CORE_ASSETS` 含 puzzle-solver.js / puzzles.js / daily-picker.js / ai-engine.js |
 | `scripts/gen-puzzles.mjs` | 題庫生成器:自我對弈 → 解題器證明 → 分級挑題 → 寫 puzzles.js(種子+局數決定,可重現) |
 | `scripts/smoke-puzzles.mjs` | 解謎流程真瀏覽器冒煙(Playwright,借 Desktop/hfpc-sparks-hub 的;不在 npm test 裡) |
-| `scripts/smoke-resume.mjs` | 接續上一盤真瀏覽器冒煙(15 項;同樣借 Playwright、不在 npm test 裡)。**動 `replaying` / `commitMove` / 開機序列就要跑它** |
-| `tests/` | `game-rules.test.mjs`(規則)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `daily-picker.test.mjs`(每日抽題掃 400 天)+ `static.test.mjs`(靜態字串) |
+$1
+| `scripts/smoke-ai.mjs` | 大師檔 + 💡 提示真瀏覽器冒煙(8 項;自己起 127.0.0.1:8766,`BASE=` 可打線上;借 Playwright、不在 npm test 裡)。**動 `ai-engine.js` / `chooseAiMove` / `showHint` 就要跑它** |
+| `scripts/ai-bench.mjs` | 新引擎 vs 舊大師對打(舊 `chooseAiMove` master 檔逐行搬進去當基準)。改了引擎手跑一次、結果記進 HANDOFF;不在 npm test 裡(一局幾十秒) |
+$1`ai-engine.test.mjs`(引擎戰術 24 項,解題器當裁判)+ `puzzle-solver.test.mjs`(解題器)+ `puzzles.test.mjs`(**逐題重證**)+ `daily-picker.test.mjs`(每日抽題掃 400 天)+ `static.test.mjs`(靜態字串) |
 
 棋盤座標的單一真相:`script.js` 的 `ratioAtIndex()` / `CELL_RATIO` / `MARGIN_RATIO` / `HOTSPOT_RATIO`。
 
@@ -143,7 +153,8 @@ npm run verify        # lint + 單元測試(必須綠)
 # 動了 replaying / commitMove / 開機序列 / localStorage 讀寫 → 一定要再跑真瀏覽器冒煙:
 python -m http.server 8765 --bind 127.0.0.1      # 另一個視窗
 node scripts/smoke-resume.mjs                    # 接續上一盤(15 項)
-node scripts/smoke-puzzles.mjs                   # 解謎流程(23 項)
+$1node scripts/smoke-ai.mjs                        # 大師檔+提示(8 項;自己起 8766,不必先開 http.server)
+npm run bench:ai                                 # 動了 ai-engine.js → 新引擎 vs 舊大師 6 局,結果記進 HANDOFF
 ```
 ★★ **`npm run verify` 綠 ≠ 開得起來。** `script.js` 與 DOM 耦合、單元測試載不進去,
 `node --check` 只驗語法 ⇒ **TDZ 的 ReferenceError、開機序列被中斷、狀態列說謊這三類全部驗不到**

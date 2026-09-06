@@ -1,4 +1,5 @@
 import { analyzeForbiddenMove, analyzeMoveThreat } from "./game-rules.js";
+import { chooseBestMove } from "./ai-engine.js";   // 🧠 大師檔與 💡 提示的引擎(0906;純函式、零 DOM,借解題器的威脅空間搜尋)
 import { createTouchLens, paintBoardNeighborhood } from "./touch-lens.js";   // 🔍 手機觸控放大鏡(共用件,正本在 skills repo canvas-touch-targets/assets)
 import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
 import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
@@ -22,7 +23,9 @@ const AI_LEVELS = {
   easy:    { label:"簡單",   topK:8,  randomTop:5, mistake:0.42, blockErr:0.20, lookahead:0, thinkDelay:[240,520] },
   normal:  { label:"普通",   topK:10, randomTop:3, mistake:0.15, blockErr:0.0,  lookahead:0, thinkDelay:[300,620] },
   hard:    { label:"困難",   topK:12, randomTop:2, mistake:0.03, blockErr:0.0,  lookahead:1, thinkDelay:[360,760] },
-  master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, thinkDelay:[420,900] },
+  /* 🧠 engine:true ⇒ 走 ai-engine.js(成五/擋五/VCF/破 VCF/VCT/擋活三/深算 分層決策,每手最多 budgetMs)。
+     其他三檔維持舊的「候選打分 + 淺搜 + 故意犯錯」,孩子才玩得贏;大師與 💡 提示要的是真的強。 */
+  master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, thinkDelay:[420,900], engine:true, budgetMs:900 },
 };
 
 const PATTERN = {
@@ -513,13 +516,14 @@ function showHint() {
   if (!move) {
     move = chooseAiMove(AI_LEVELS.master, currentPlayer);
     if (!move) { bubble("💡 找不到可以下的位置了"); return; }   // 三態:誠實說沒有
-    hintCache = { key, row: move.row, col: move.col };
+    hintCache = { key, row: move.row, col: move.col, reason: move.reason || "" };
   }
 
   const el = pointRefs[move.row][move.col];
   el.classList.add("hint-spot");
   setTimeout(() => el.classList.remove("hint-spot"), 1800);
-  bubble(`💡 建議：${coordLabel(move.row, move.col)}`);
+  // 理由是引擎給的一句白話(「對手活三,必須擋」那種),讓人知道為什麼是這一點,不是只給座標
+  bubble(`💡 建議：${coordLabel(move.row, move.col)}${move.reason ? `（${move.reason}）` : ""}`, 3400);
 }
 
 /* ---------- 9. AI ---------- */
@@ -571,6 +575,12 @@ function setAiThinking(v) {
 }
 
 function chooseAiMove(config, aiColor) {
+  /* 🧠 大師檔與提示走引擎(0906):回 {row,col,reason};只有引擎回 null(盤滿)才落回下面的舊路。
+     由來:使用者照提示下棋輸了——舊的大師只擋「下一手成五」,看不見活三→活四連殺,也不會找自己的連續衝四。 */
+  if (config.engine) {
+    const m = chooseBestMove(boardState, BOARD_SIZE, aiColor, { renjuBlack: forbiddenOn, timeBudgetMs: config.budgetMs || 900 });
+    if (m) return m;
+  }
   // Opening book: 第一手中央; 第二手鄰近
   if (moveHistory.length === 0) {
     const c = Math.floor(BOARD_SIZE / 2);

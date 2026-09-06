@@ -267,6 +267,9 @@ class Search {
     this.def = other(attacker);
     this.vcfOnly = opts.vcfOnly === true;
     this.budget = opts.budget ?? 200000;
+    /* opts.deadline(Date.now() 的毫秒時刻;0906 加給對局引擎 ai-engine.js 用):超時就 ABORT → aborted:true。
+       每 256 個節點才看一次錶(Date.now 不便宜)。不帶 deadline 時行為逐位元不變——題庫生成/重證都不帶。 */
+    this.deadline = opts.deadline || 0;
     this.nodes = 0;
     this.bestMove = null;   // attackerMin 在根節點找到的最短解第一手
   }
@@ -275,6 +278,7 @@ class Search {
   attackerMin(cap, isRoot = false) {
     if (cap <= 0) return INF;
     if (++this.nodes > this.budget) throw ABORT;
+    if (this.deadline && (this.nodes & 255) === 0 && Date.now() > this.deadline) throw ABORT;
     const { board, size, att, def } = this;
     const attWins = winningCells(board, size, att);
     if (attWins.length) { if (isRoot) this.bestMove = attWins[0]; return 1; }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "gomoku-pwa-v17";
+const CACHE_NAME = "gomoku-pwa-v19";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const CORE_ASSETS = [
   "./script.js",
   "./touch-lens.js",
   "./game-rules.js",
+  "./ai-engine.js",
   "./puzzle-solver.js",
   "./puzzles.js",
   "./daily-picker.js",

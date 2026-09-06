@@ -19,14 +19,19 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v17/);
+assert.match(serviceWorker, /gomoku-pwa-v19/);
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);
 assert.match(serviceWorker, /"\.\/daily-picker\.js"/);
+assert.match(serviceWorker, /"\.\/ai-engine\.js"/);   // 🧠 少了它 cache.addAll 不會失敗,但離線時大師/提示會 import 不到而整支 script.js 掛掉
 assert.match(script, /from "\.\/puzzles\.js"/);
 assert.match(script, /from "\.\/puzzle-solver\.js"/);
 assert.match(script, /from "\.\/daily-picker\.js"/);
+assert.match(script, /from "\.\/ai-engine\.js"/);
+/* 🧠 大師檔必須走引擎(0906):使用者照提示輸棋的病根就是提示用的大師只有淺搜。拿掉 engine:true 這條會紅。 */
+assert.match(script, /master:\s*\{[^\n]*engine:\s*true/);
+assert.match(script, /if \(config\.engine\) \{\s*\n\s*const m = chooseBestMove\(boardState, BOARD_SIZE, aiColor/);
 // 解謎面板四顆鈕 + 進度行(2026-09-02 重做:步數限制、最強防守、答錯判負可重試、分級與進度)
 for (const id of ["puzzleSelect", "puzzleStart", "puzzleNext", "puzzleHintBtn", "puzzleShare", "puzzleProgress", "puzzleHint", "puzzleStars"]) {
   assert.match(index, new RegExp(`id="${id}"`), `index.html 缺 #${id}`);

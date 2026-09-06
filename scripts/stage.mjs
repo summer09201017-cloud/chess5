@@ -24,6 +24,7 @@ const SITE_FILES = [
   "script.js",
   "touch-lens.js",
   "game-rules.js",
+  "ai-engine.js",
   "puzzle-solver.js",
   "puzzles.js",
   "daily-picker.js",

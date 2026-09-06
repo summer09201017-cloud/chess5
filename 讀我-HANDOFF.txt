@@ -4,6 +4,8 @@
 ================================================================================
 
 ★★★★★ 2026-09-06 下午③(agape250 機・Fable 5.1・take-over 場)🧵 引擎搬 Web Worker + 🛡 困難檔接防守層 —— SW v20 → v21 ★★★★★
+  🧾 git 事實(/handoff 交接時實查,不是憑印象):status --short 空・程式最後一顆 b5b44c0(本交接 commit 之後 HEAD 見 git log -1)・rev-list @{u}..HEAD = 0(真的推上去了)
+     ・npm run verify 全綠(ai-engine 31 / vertag sw v21 / 84 題重證)・線上 https://5-chess.pages.dev sw gomoku-pwa-v21・桌面 zip 以 git archive HEAD 打(與 origin/main 逐檔一致,不含 .git / node_modules)。
   由來:使用者聽完 1(困難檔接防守層)與 2(Web Worker)的白話利弊,拍板「兩個都做」。
   ① 🛡 困難檔:ai-engine.js 主入口拆成 decide(mode)——chooseBestMove = full(大師/提示,原樣)、新 export chooseDefensiveMove = defend:
      只跑 ①成五 ②擋五 ④破對手 VCF ⑥擋活三/破對手 VCT,有威脅才回一手,沒威脅回 null ⇒ 呼叫端走舊路(打分 + 3% 故意犯錯)。預算 400ms。

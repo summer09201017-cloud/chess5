@@ -12,6 +12,22 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="style.css">
+<style id="mfsZoomStyle">
+/* mfs-portrait-zoom v1 —— 勿手改;要改請改 skills/force-landscape-pwa/patches/add-portrait-zoom.mjs 後重打 */
+#mfsFull{display:none}
+@media (pointer:coarse){
+  /* 只在觸控裝置、且還沒進全螢幕時出現;進了就自己藏 ⇒ 玩的時候不壓到棋盤/HUD。桌機不顯示(按 F11) */
+  body:not(.mfs-fs) #mfsFull{position:fixed;display:flex;align-items:center;justify-content:center;
+    top:calc(8px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));
+    z-index:2147482000;width:42px;height:42px;padding:0;border-radius:11px;
+    border:1px solid rgba(255,255,255,.42);background:rgba(9,15,19,.55);color:#fff;
+    cursor:pointer;opacity:.55;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+  body:not(.mfs-fs) #mfsFull:hover,body:not(.mfs-fs) #mfsFull:focus-visible{opacity:1}
+}
+
+body.immersive :is(.panel-head){display:none!important}
+body.immersive .board-3d{width:min(100%,900px,94vh)}
+</style>
 </head>
 <body data-theme="wood" data-skin="classic" data-weather="none">
   <main class="app">
@@ -239,12 +255,12 @@
 
       <details class="ver-fold">
 
-        <summary>版本 v23(2026-09-06)・看看前幾版做了什麼</summary>
+        <summary>版本 v24(2026-09-07)・看看前幾版做了什麼</summary>
 
         <p id="verTag" class="ver-tag">
 
-          版本 v23(2026-09-06)⏱ <b>「大師」不再假裝思考</b>——以前電腦每一手都要先停 0.4~0.9 秒才開始算,現在按下去就直接開始想:實測每一手的等待從 1.1~1.4 秒降到 0.5~0.7 秒(快了一半),棋力一點都沒變。<br>
-          前幾版:v22 🧠 「大師」想得更久、看得更遠——每手思考上限由 0.9 秒放寬到 2 秒,更常真的算出必勝殺著而不只是「看起來不錯」;因為思考已搬到背景,畫面照樣不卡(2026-09-06)
+          版本 v24(2026-09-07)⛶ <b>手機放大鈕</b>——右上角一顆放大鈕:收掉上方標題列、棋盤填滿可用寬度(平板/桌機最多 900px,橫向不超過螢幕高);Android 會連瀏覽器網址列一起收掉,iPhone 不支援網頁全螢幕也照樣放得大;再按一次縮回。<br>
+          前幾版:v23 ⏱ 「大師」不再假裝思考——以前電腦每一手都要先停 0.4~0.9 秒才開始算,現在按下去就直接開始想:實測每一手的等待從 1.1~1.4 秒降到 0.5~0.7 秒(快了一半),棋力一點都沒變。(2026-09-06)・v22 🧠 「大師」想得更久、看得更遠——每手思考上限由 0.9 秒放寬到 2 秒,更常真的算出必勝殺著而不只是「看起來不錯」;因為思考已搬到背景,畫面照樣不卡(2026-09-06)
 
           ・v21 🧵 電腦思考搬到背景執行緒——轉棋盤、按按鈕不再卡;「困難」學會擋活三、破連四(2026-09-06)
 
@@ -340,5 +356,51 @@
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <div id="appVerBadge"></div>
 <script type="module" src="script.js"></script>
+<!-- mfs-portrait-zoom v1 -->
+<button type="button" id="mfsFull" title="放大(全螢幕)" aria-label="放大(全螢幕)" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<script>
+/* mfs-portrait-zoom v1 */
+(function () {
+  try {
+    if (window.self !== window.top) { var f0 = document.getElementById('mfsFull'); if (f0) f0.remove(); return; } /* 嵌入時不搶宿主 */
+    var targetSel = "";
+    var fsEl = function () { return (targetSel && document.querySelector(targetSel)) || document.documentElement; };
+    var isFs = function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); };
+    var immersive = false;
+    var btn = document.getElementById('mfsFull');
+    
+    function refit() {
+      /* Three.js / canvas 遊戲多半聽 resize 重算;版面剛變、要等一幀再發,不然量到舊尺寸 */
+      requestAnimationFrame(function () { try { window.dispatchEvent(new Event('resize')); } catch (e) {} });
+    }
+    function paint() {
+      try {
+        document.body.classList.toggle('immersive', immersive);
+        document.body.classList.toggle('mfs-fs', isFs());
+        if (btn) { btn.setAttribute('aria-pressed', String(immersive)); var s = btn.querySelector('span'); if (s) s.textContent = immersive ? '縮小' : '放大'; }
+      } catch (e) {}
+      refit();
+    }
+    function toggle() {
+      immersive = !immersive;
+      try {
+        var el = fsEl();
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+        var out = document.exitFullscreen || document.webkitExitFullscreen;
+        if (immersive && req && !isFs()) { var p = req.call(el); if (p && p.catch) p.catch(function () {}); }
+        else if (!immersive && isFs() && out) { var q = out.call(document); if (q && q.catch) q.catch(function () {}); }
+      } catch (e) { /* iOS Safari 不支援網頁全螢幕:只吃 immersive 樣式,不能炸遊戲 */ }
+      paint();
+    }
+    if (btn) btn.addEventListener('click', toggle);
+    /* 使用者按 Esc / 系統手勢退出全螢幕 ⇒ 沉浸樣式也收;只在支援全螢幕的裝置跟隨(iPhone 沒這事件,跟隨會誤關) */
+    var supports = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    if (supports) ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
+      document.addEventListener(ev, function () { if (!isFs() && immersive) { immersive = false; } paint(); });
+    });
+    paint();
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>

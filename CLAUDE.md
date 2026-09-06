@@ -55,6 +55,7 @@
   ⚠ 使用者實際等待 = `thinkDelay`(0.42~0.9 秒)+ 引擎時間,**thinkDelay 是加在引擎之前的** ⇒ 最壞約 2.9 秒,典型約 0.7~1.2 秒。
   ⚠ `tests/ai-engine.test.mjs` 的 VCT 那題預算改用 2000(原本 call() 的 700):700ms 在**較慢的機器**上 VCT 來不及收工 ⇒ 招法仍對但 reason 掉成「往後算了 3 手」⇒ 那一行在 HFP 機紅、agape250 機綠。
   ★ 通則:凡是「要證明某個搜尋層跑得完」的測試,預算要對齊正式設定,否則測到的是這台機今天多快。
+- **2026-09-07 ⛶ 手機放大鈕**(使用者拍板「棋類 9 站套直向放大鈕」;SW **v24**):右上角 `#mfsFull`(觸控裝置才顯示、進全螢幕就藏),按下 `requestFullscreen()` + `body.immersive`(收 `.panel-head`、`.board-3d` → `min(100%,900px,94vh)`;⚠ 第一版寫 94vmin,手機直向 94vmin=367 < 本來的 100%=390,反而縫小——vmin 在直向等於寬度,不能拿來「放大」),進出補發 resize。跨專案補丁 `~/.claude/skills/force-landscape-pwa/patches/add-portrait-zoom.mjs`,勿手改注入段。
 - **2026-09-06 ⏱ 砍掉大師的「假思考」**(使用者拍板;SW **v23**):`AI_LEVELS.master` 的 `thinkDelay:[420,900]` 換成 `minThinkMs:240`。
   原本 `startAiTurn` 是「先 `setTimeout` 假裝思考 0.42~0.9 秒,**再**叫引擎算」——兩段**相加不是重疊**,而大師的引擎本來就真的在算 ⇒ 那段等待純浪費。
   改成馬上開算,只有引擎回得太快(一眼看穿的必勝/必擋)才補到 `minThinkMs`(`finishPaced`,排在 `aiTimer` 上 ⇒ 重開/悔棋/換模式既有的 `clearTimeout` 照樣取消得掉)。

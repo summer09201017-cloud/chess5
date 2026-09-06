@@ -26,7 +26,18 @@
      ★ 大師第一手 273ms = 開局書瞬間回、被 minThinkMs 補到 240 ⇒ 地板真的有在作用;困難第一手 453ms = 它的 thinkDelay 沒被動到。
   📝 順手補帳(文件 drift):本檔在 v21 之後就沒更新過 —— v22(budgetMs 900→2000)只寫進了 skills repo 的大表/HANDOFF,
      這裡的表頭與「下一手若要更強」都還停在 v21 的世界。表頭已補、那條就地加了「已完成」註記(不改寫原文)。
-  🧾 git 事實:本輪 commit 見 git log -1;⚠ 線上要等 push 觸發 CI 部署完才會是 v23,抓 sw 前先確認 CI 綠。
+  🚀 線上:`8c306d3` push 後 CI 綠但**沒部署**(secrets 沒設,annotation「已跳過部署」;CLAUDE.md 那行只寫了前半句)⇒ 手動 `npm run deploy`,
+     線上 sw gomoku-pwa-v23、script.js 有 minThinkMs、舊 thinkDelay:[420,900] 零命中、verTag v23。線上 smoke-ai master 3 輪 + hard 1 輪全綠;
+     線上量一輪(npm run measure:wait,BASE=線上)中位 628ms / 平均 768 / 最慢 1989 —— 與本機新版同一個區間。
+  ⚠⚠ **一場自己嚇自己的假回歸(值得記)**:線上 smoke 第 ⑥ 條「主執行緒沒凍」量到 833ms 紅,接著 417 / 333 / 283 / 150 忽紅忽綠;
+     拿舊版 v22 的 Pages 部署網址(4eb23740.5-chess.pages.dev)當對照組跑 3 輪都 167~183 綠 ⇒ 我一度判定「是我改出來的真回歸」。
+     再做逐手探針:兩版**每一手**的 rAF 間隔都只有 83~167ms;再做時間軸探針:尖峰**全部落在 reset 暖機段**(SW 安裝 + 14 個資產預快取 + 重建棋盤),
+     而且那一輪舊版反而更大(333 / 217 / 367 vs 新版 0 / 0 / 233)⇒ 跟電腦思考無關、跟我的改動無關。
+     病根是**那顆守門量錯窗**:__maxGap 從 reset 之前就開始累計,自稱量「電腦思考時會不會凍」,量到的是「這次 CDN + SW 暖機多快」。
+     修法:scripts/smoke-ai.mjs 在 reset 落定後把 __maxGap 歸零,量測窗從第一手開始。改後線上 3 輪 183 / 167 / 183、hard 100、本機 117,穩了。
+     ★ 通則兩條:①「3 輪對 3 輪」不夠下「回歸」的結論,尤其兩邊網址新舊不同(正式 vs preview)還混著;②量法自稱量什麼、就只能包含那段——
+        跟 tests/ai-engine.test.mjs 那顆 VCT 題同一族(測試量到的是「這台機今天多快」而不是它宣稱的東西),差別只在這次是「這條網路今天多快」。
+  🧾 git 事實:程式 `8c306d3`(v23)+ 本 commit(smoke ⑥ 量測窗 + 文件);status 空、@{u}..HEAD = 0 見 git log -1。
 
 ★★★★★ 2026-09-06 下午③(agape250 機・Fable 5.1・take-over 場)🧵 引擎搬 Web Worker + 🛡 困難檔接防守層 —— SW v20 → v21 ★★★★★
   🧾 git 事實(/handoff 交接時實查,不是憑印象):status --short 空・程式最後一顆 b5b44c0(本交接 commit 之後 HEAD 見 git log -1)・rev-list @{u}..HEAD = 0(真的推上去了)

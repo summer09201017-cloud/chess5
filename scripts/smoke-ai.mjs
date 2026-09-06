@@ -99,6 +99,12 @@ try {
   await page.check('input[name="playerColor"][value="black"]');
   await page.click("#resetBtn");
   await page.waitForTimeout(300);
+  /* ★ 量測窗從「第一手」開始,不含前面的暖機期(reset 重建棋盤 + SW 安裝與 14 個資產預快取)。
+     0906 深夜線上實錄:同一份程式 ⑥ 量到 833 / 417 / 333 / 283 / 150ms 忽紅忽綠,時間軸探針一看,
+     尖峰全落在 reset 那段(舊版 v22 甚至更大:333 / 217 / 367ms),跟電腦思考一點關係都沒有 ——
+     這條守門自稱量「電腦思考時主執行緒會不會凍」,量到的卻是「這次 CDN 與 SW 暖機多快」。
+     暖機期的卡頓要管是另一條守門的事,不該讓它把這條變成擲骰子。 */
+  await page.evaluate(() => { window.__maxGap = 0; });
 
   const gameOver = () => page.evaluate(() => !!document.querySelector("dialog[open]") || /勝|贏|和局|超時/.test(document.getElementById("status").textContent));
 

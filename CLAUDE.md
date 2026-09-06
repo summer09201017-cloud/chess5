@@ -162,7 +162,7 @@
 Cloudflare Pages 專案 `5-chess` 是 **direct upload**(不連 Git),所以由
 `.github/workflows/deploy-cloudflare.yml` 用 wrangler 推上去。
 
-- **push 到 main → CI 跑 `npm run verify`,再自動部署到 pages.dev。**
+- **push 到 main → CI 跑 `npm run verify`,再自動部署到 pages.dev。** ⚠ **截至 2026-09-06 secrets 沒設 ⇒ CI 實際只驗證、不部署**(annotation 明寫「已跳過部署」但 run 是綠的)——線上版本**只靠本機 `npm run deploy`**;0906 深夜就是只看這一行以為推了就會上,等了十分鐘線上還是舊版。
   前提是 repo 已設好 secrets `CLOUDFLARE_API_TOKEN` 與 `CLOUDFLARE_ACCOUNT_ID`;
   **沒設好時部署那一步會被跳過、CI 仍是綠的**(只跑驗證),不會留紅燈。
 - 本機要手動出一版:`npm run deploy`(= verify → stage → wrangler pages deploy)。

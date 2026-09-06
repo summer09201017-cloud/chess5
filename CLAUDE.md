@@ -46,6 +46,15 @@
 - **2026-09-06 🏷 版本號兩件套(鐵則⑦;0906 全艦隊普查本站原列 🔴)**:左欄底 `details.ver-fold` 摺疊改版簡歷(v20→v1 白話、不跳號;v4~v1 上線前草稿版控無紀錄,寫成範圍)
   + 右下 `#appVerBadge` 問 SW 拿真版本、10 秒淡出(邏輯在 `script.js` 尾,`index.html` 維持無內嵌 JS)。`tests/vertag.test.mjs` 守 verTag==sw / 前幾版不跳號 / 帶日期 / CLAUDE.md 最新 SW vN 同版 / 徽章三件套 / script.js 不寫死版號。
   ★ **改版四處一起改:`service-worker.js` CACHE_NAME、`tests/static.test.mjs` 硬編版號、`index.html` verTag(summary + 本版一句 + 前幾版)、CLAUDE.md 這裡寫一條 SW vN**——漏一處 npm test 當場紅。SW **v20**。
+- **2026-09-06 ⏱ 大師思考上限 900ms → 2000ms**(使用者拍板;SW **v22**):`AI_LEVELS.master.budgetMs`,一個數字。
+  Worker 化(v21)之後主執行緒最長只停 50~67ms ⇒ 放寬上限不再有卡畫面的代價,900 只是白白綁住棋力。💡 提示走同一個值(`showHint` 讀 `AI_LEVELS.master.budgetMs`)。
+  ★ **量法用殘局題庫,不要用自我對打**:同引擎不同預算自我對打 8 局 = 3:3:2,**看不出差別**(雜訊遠大於差異);
+  改用 61 題「解題器證明過必勝」的殘局各跑一次,訊號立刻乾淨——招法對 58→59、**認出必勝 48→50**(79%→82%),多認出的兩題都是 t5 vct(五手必勝且對手有反衝四)。
+  預算曲線(本機 HFP):900→48 題・1200→49・**1500→50**・2000→50・3000→50 ⇒ **1500 就吃滿**,桌機上 2000 沒有再多。
+  仍選 2000 的理由:①budgetMs 是**上限不是固定成本**(算出來就提早收工,實測平均只有 259ms/手,不是 2 秒)②使用者是在**手機**上玩(原始抱怨就是手機實玩來的),手機 CPU 比這台桌機慢得多,2000 是給慢裝置的餘裕。
+  ⚠ 使用者實際等待 = `thinkDelay`(0.42~0.9 秒)+ 引擎時間,**thinkDelay 是加在引擎之前的** ⇒ 最壞約 2.9 秒,典型約 0.7~1.2 秒。
+  ⚠ `tests/ai-engine.test.mjs` 的 VCT 那題預算改用 2000(原本 call() 的 700):700ms 在**較慢的機器**上 VCT 來不及收工 ⇒ 招法仍對但 reason 掉成「往後算了 3 手」⇒ 那一行在 HFP 機紅、agape250 機綠。
+  ★ 通則:凡是「要證明某個搜尋層跑得完」的測試,預算要對齊正式設定,否則測到的是這台機今天多快。
 - **2026-09-06 🧵 引擎搬 Web Worker + 🛡 困難檔接防守層**(使用者拍板「兩個都做」;SW **v21**):
   `ai-worker.js`(module worker,零邏輯殼)跑 `chooseBestMove` / `chooseDefensiveMove`;`script.js` 8b 節 `engineMoveAsync` 是橋——Worker 建不起 / 出錯 / 超時(預算+2.5s)一律退回同步算(行為同搬之前,只是會凍)。
   `startAiTurn` 用世代號 `aiGen` + `aiThinking` 守「Worker 回來時世界變了就丟」;`showHint` 先出「思考中」再顯示,盤面變了就不顯示。

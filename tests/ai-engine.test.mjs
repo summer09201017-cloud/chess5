@@ -88,7 +88,12 @@ console.log("── ② 連續衝四(VCF)/ 活三連殺(VCT)──");
   const proof = solve(b, 15, "black", 7);
   ok("前提:解題器證黑 3 手必勝", proof.depth === 3, "depth=" + proof.depth);
   const firsts = winningFirstMoves(b, 15, "black", 3).moves.map(([r, c]) => r + "," + c);
-  const m = call(b, "black");
+  /* ⏱ 這一題要驗的是「VCT 層真的跑完並認出必勝」,所以預算要給到**線上大師檔的值**(2000),不能用 call() 的 700。
+     由來(0906,HFP 機):700ms 在較慢的機器上 VCT 來不及收工 ⇒ 掉進 alpha-beta,招法仍對(上一行照樣綠)、
+     但 reason 變成「往後算了 3 手」⇒ 這一行紅。同一份程式在 agape250(較快)全綠、HFP 紅 = **機器速度邊界**,
+     不是程式壞了。實測門檻 1200~1500ms。★ 通則:凡是「要證明某個搜尋層跑得完」的測試,預算就得對齊正式設定,
+     否則測到的是這台機今天多快,不是引擎有多強。 */
+  const m = call(b, "black", { timeBudgetMs: 2000 });
   ok("引擎的第一手在必勝首手集合裡(三三)", firsts.includes(m.row + "," + m.col), JSON.stringify(m) + " ∉ " + firsts.join(" "));
   ok("理由是活三連殺/必勝", /連殺|必勝/.test(m.reason), m.reason);
 }

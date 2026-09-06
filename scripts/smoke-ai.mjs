@@ -7,7 +7,8 @@
  *   LEVEL=hard node scripts/smoke-ai.mjs                        # 困難檔(預設 master);兩檔都要跑一次
  *
  * 驗的是「人玩得到」不是「函式會動」(evaluate-not-click-guard):
- *   ① 選大師、人執黑,真的**點**交點落子 → 電腦在 2.5 秒內回一手(狀態列有「大師」字樣)
+ *   ① 選大師、人執黑,真的**點**交點落子 → 電腦在 6 秒內回一手(狀態列有「大師」字樣)
+ *      ⚠ 別把這個上限收緊:大師的等待 = thinkDelay(0.42~0.9s)+ 引擎(budgetMs 上限 2s)⇒ 最壞約 2.9 秒。
  *   ② 連下三手把黑棋做成活三(電腦每手都回)→ 電腦的回手要讓黑棋做不出活四(擋或反衝四)
  *   ③ 按 💡 提示 → 氣泡出現「建議:XX(理由)」而且有一格亮 .hint-spot
  *   ④ 全程 console 沒有 error / pageerror
@@ -15,12 +16,28 @@
  */
 import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { defenderOptions } from "../puzzle-solver.js";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PW = process.env.PLAYWRIGHT_PATH || "C:/Users/agape250/Desktop/hfpc-sparks-hub/node_modules/playwright/index.mjs";
+/* 🔎 借別的 repo 的 playwright(本 repo 不裝)。★ 兩台機的家目錄與 clone 位置都不同 ⇒ 不可以寫死一條路徑:
+   0906 實錄:原本只寫死 agape250 的路徑,在 HFP 機上這個檔根本不存在 ⇒ 冒煙腳本一跑就炸,
+   而它是「上線前唯一的真瀏覽器關卡」⇒ 等於那台機的人只能跳過它。改成依序試,找不到才報清楚要怎麼指定。 */
+const PW_CANDIDATES = [
+  process.env.PLAYWRIGHT_PATH,
+  path.join(os.homedir(), "Desktop/hfpc-sparks-hub/node_modules/playwright/index.mjs"),
+  path.join(os.homedir(), "Downloads/hfpc-git/checkers/node_modules/playwright/index.mjs"),
+  path.join(os.homedir(), "Desktop/hfpc-claude-skills/node_modules/playwright/index.mjs"),
+].filter(Boolean);
+const PW = PW_CANDIDATES.find((p) => fs.existsSync(p));
+if (!PW) {
+  console.error("❌ 找不到 playwright。這個 repo 不裝它,是跟別的 repo 借的。");
+  console.error("   試過:\n     " + PW_CANDIDATES.join("\n     "));
+  console.error("   指定路徑再跑:PLAYWRIGHT_PATH=<...>/node_modules/playwright/index.mjs node scripts/smoke-ai.mjs");
+  process.exit(1);
+}
 const { chromium } = await import(pathToFileURL(PW).href);
 const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript", ".png": "image/png", ".webmanifest": "application/manifest+json", ".json": "application/json", ".svg": "image/svg+xml" };
 

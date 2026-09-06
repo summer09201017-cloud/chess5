@@ -26,8 +26,13 @@ const AI_LEVELS = {
      0906 使用者拍板:「不會漏擋、但仍會犯錯」——孩子還是贏得了,只是不會再輸給「電腦眼睜睜看著活三不擋」。 */
   hard:    { label:"困難",   topK:12, randomTop:2, mistake:0.03, blockErr:0.0,  lookahead:1, thinkDelay:[360,760], defend:true, budgetMs:400 },
   /* 🧠 engine:true ⇒ 走 ai-engine.js(成五/擋五/VCF/破 VCF/VCT/擋活三/深算 分層決策,每手最多 budgetMs)。
-     其他三檔維持舊的「候選打分 + 淺搜 + 故意犯錯」,孩子才玩得贏;大師與 💡 提示要的是真的強。 */
-  master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, thinkDelay:[420,900], engine:true, budgetMs:900 },
+     其他三檔維持舊的「候選打分 + 淺搜 + 故意犯錯」,孩子才玩得贏;大師與 💡 提示要的是真的強。
+     ⏱ budgetMs 900 → 2000(0906 使用者拍板):引擎搬 Worker 後主執行緒最長只停 50~67ms,再久也不卡畫面,
+        900 的上限就只是白白綁住棋力。★ 這不是「多想一點點」而已 —— 900ms 時 VCT 層常來不及跑完就掉進
+        alpha-beta,理由印「往後算了 3 手」(=只是覺得局面好);過了門檻才會印「活三連殺,N 手內必勝」(=真的算出必勝)。
+        本機(HFP,較慢那台)實測門檻在 1200~1500ms 之間,agape250 較快 ⇒ 同一份程式在兩台機棋力不同,2000 讓兩台都過得了門檻。
+        ⚠ 總等待 = thinkDelay(0.42~0.9 秒)+ 引擎時間,不是只有 budgetMs;引擎找到必勝會提早收工,不會每手都用滿。 */
+  master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, thinkDelay:[420,900], engine:true, budgetMs:2000 },
 };
 
 const PATTERN = {

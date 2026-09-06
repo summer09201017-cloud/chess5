@@ -55,6 +55,14 @@
   ⚠ 使用者實際等待 = `thinkDelay`(0.42~0.9 秒)+ 引擎時間,**thinkDelay 是加在引擎之前的** ⇒ 最壞約 2.9 秒,典型約 0.7~1.2 秒。
   ⚠ `tests/ai-engine.test.mjs` 的 VCT 那題預算改用 2000(原本 call() 的 700):700ms 在**較慢的機器**上 VCT 來不及收工 ⇒ 招法仍對但 reason 掉成「往後算了 3 手」⇒ 那一行在 HFP 機紅、agape250 機綠。
   ★ 通則:凡是「要證明某個搜尋層跑得完」的測試,預算要對齊正式設定,否則測到的是這台機今天多快。
+- **2026-09-06 ⏱ 砍掉大師的「假思考」**(使用者拍板;SW **v23**):`AI_LEVELS.master` 的 `thinkDelay:[420,900]` 換成 `minThinkMs:240`。
+  原本 `startAiTurn` 是「先 `setTimeout` 假裝思考 0.42~0.9 秒,**再**叫引擎算」——兩段**相加不是重疊**,而大師的引擎本來就真的在算 ⇒ 那段等待純浪費。
+  改成馬上開算,只有引擎回得太快(一眼看穿的必勝/必擋)才補到 `minThinkMs`(`finishPaced`,排在 `aiTimer` 上 ⇒ 重開/悔棋/換模式既有的 `clearTimeout` 照樣取消得掉)。
+  ⇒ 總等待 = max(引擎時間, `minThinkMs`)。**同機 A/B 實測**(本機站,只換 `script.js`,同一組 7 手 × 3 輪):中位 **1124~1416ms → 535~674ms**、
+  平均 1321~1490 → 716~828、最快 734~990 → 408~436、最慢 2627~2832 → 1713~1836;rAF 最大間隔 150~167ms 兩邊一樣(沒有換來新的卡頓)、console 零錯誤。
+  ★ **其他三檔的 `thinkDelay` 不要一起砍**:easy/normal/hard 幾乎瞬間就算完,沒有那個停頓會像作弊 —— 那是難度設計的一部分,不是浪費。
+  ⚠ 量法:別用「感覺變快了」。這件事量的是**畫面上的等待**(從點下去到電腦的子出現),`scripts/measure-master-wait.mjs` 那型的量法;
+  也別只量一輪 —— 開局書有隨機性,同一組手也會落在不同局面。
 - **2026-09-06 🧵 引擎搬 Web Worker + 🛡 困難檔接防守層**(使用者拍板「兩個都做」;SW **v21**):
   `ai-worker.js`(module worker,零邏輯殼)跑 `chooseBestMove` / `chooseDefensiveMove`;`script.js` 8b 節 `engineMoveAsync` 是橋——Worker 建不起 / 出錯 / 超時(預算+2.5s)一律退回同步算(行為同搬之前,只是會凍)。
   `startAiTurn` 用世代號 `aiGen` + `aiThinking` 守「Worker 回來時世界變了就丟」;`showHint` 先出「思考中」再顯示,盤面變了就不顯示。

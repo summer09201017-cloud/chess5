@@ -31,8 +31,13 @@ const AI_LEVELS = {
         900 的上限就只是白白綁住棋力。★ 這不是「多想一點點」而已 —— 900ms 時 VCT 層常來不及跑完就掉進
         alpha-beta,理由印「往後算了 3 手」(=只是覺得局面好);過了門檻才會印「活三連殺,N 手內必勝」(=真的算出必勝)。
         本機(HFP,較慢那台)實測門檻在 1200~1500ms 之間,agape250 較快 ⇒ 同一份程式在兩台機棋力不同,2000 讓兩台都過得了門檻。
-        ⚠ 總等待 = thinkDelay(0.42~0.9 秒)+ 引擎時間,不是只有 budgetMs;引擎找到必勝會提早收工,不會每手都用滿。 */
-  master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, thinkDelay:[420,900], engine:true, budgetMs:2000 },
+     ⏱ 0906 使用者拍板「砍掉大師的假思考」:原本 thinkDelay(0.42~0.9 秒)是一個 setTimeout **加在引擎之前**
+        ——兩段相加、不是重疊。引擎本來就真的在算(實測平均 259ms/手)⇒ 那段假裝思考純浪費。
+        大師改成**沒有 thinkDelay、只有 minThinkMs**:馬上開算,只有引擎回得太快(一眼看穿的必勝/必擋)才補到 minThinkMs,
+        免得「思考中...」閃一下就沒了、棋子瞬間冒出來。⇒ 總等待 = max(引擎時間, minThinkMs):
+        典型 0.7~1.2 秒 → 約 0.26~0.3 秒,最壞 2.9 秒 → 2.0 秒(= budgetMs 上限,引擎算不完才會用滿)。
+        ★ 其他三檔的 thinkDelay 是**故意**的:它們幾乎瞬間就算完,沒有停頓會像作弊 ⇒ 不要一起砍。 */
+  master:  { label:"大師",   topK:10, randomTop:1, mistake:0.0,  blockErr:0.0,  lookahead:3, minThinkMs:240      , engine:true, budgetMs:2000 },
 };
 
 const PATTERN = {
@@ -604,7 +609,9 @@ function startAiTurn() {
   updateStatus(`${playerLabel(currentPlayer)}（${config.label}）思考中...`);
   clearTimeout(aiTimer);
   const gen = ++aiGen;
-  const delay = randomInt(config.thinkDelay[0], config.thinkDelay[1]);
+  /* ⏱ 假思考只給「幾乎瞬間算完」的三檔;大師(engine)沒有 thinkDelay ⇒ delay 0、馬上開算(見 AI_LEVELS 那段) */
+  const t0 = Date.now();
+  const delay = config.thinkDelay ? randomInt(config.thinkDelay[0], config.thinkDelay[1]) : 0;
   aiTimer = setTimeout(() => {
     if (gameOver) { setAiThinking(false); return; }
     const aiColor = currentPlayer;
@@ -634,6 +641,14 @@ function startAiTurn() {
         updateStatus("⚠ 電腦回合發生錯誤，請按重新開始");
       }
     };
+    /* ⏱ 最短可見思考時間:引擎回得太快時補到 config.minThinkMs(大師 240ms),不夠快就直接落子(不再加任何等待)。
+       排在 aiTimer 上 ⇒ 重開/悔棋/換模式既有的 clearTimeout(aiTimer) 就取消得掉;finish 自己還有世代守門。 */
+    const finishPaced = (move) => {
+      const rest = (config.minThinkMs || 0) - (Date.now() - t0);
+      if (rest <= 0) return finish(move);
+      clearTimeout(aiTimer);
+      aiTimer = setTimeout(() => finish(move), rest);
+    };
     const legacy = (skipEngine) => {
       try { return chooseAiMove(config, aiColor, skipEngine); }
       catch (e) { console.error("[AI] chooseAiMove threw:", e); return null; }
@@ -642,8 +657,8 @@ function startAiTurn() {
       /* 🧵 大師(engine)與困難(defend)先到 Worker 算;engineMoveAsync 失敗/超時會自己同步算。
          defend 回 null = 沒威脅 ⇒ 走舊路(打分 + 故意犯錯,skipEngine 免得再同步算一次);engine 回 null = 盤滿 ⇒ finish 的後備掃描。 */
       engineMoveAsync(config.engine ? "full" : "defend", aiColor, { renjuBlack: forbiddenOn, timeBudgetMs: config.budgetMs || (config.engine ? 900 : 400) })
-        .then((m) => finish(m || (config.engine ? null : legacy(true))))
-        .catch((e) => { console.error("[AI] engine failed:", e); finish(legacy(false)); });
+        .then((m) => finishPaced(m || (config.engine ? null : legacy(true))))
+        .catch((e) => { console.error("[AI] engine failed:", e); finishPaced(legacy(false)); });
     } else {
       finish(legacy(false));
     }

@@ -1,7 +1,32 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06(agape250 機・Fable 5.1:🧵 引擎搬 Worker + 🛡 困難檔防守層 + 🏷 兩件套 + 🧠 引擎;SW v21)
-                                     前一版:2026-09-05(📊 接 play-stats 三層 + 🔍 觸控放大鏡;SW v17)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06 深夜(HFP 機・Opus 5:⏱ 砍掉大師的「假思考」;SW v23)
+                                     前一版:2026-09-06(agape250 機:🧵 引擎搬 Worker + 🛡 困難檔防守層;SW v21)+ 同日 🧠 budgetMs 900→2000(SW v22)
 ================================================================================
+
+★★★★★ 2026-09-06 深夜(HFP 機・Opus 5)⏱ 砍掉大師的「假思考」—— SW v22 → v23 ★★★★★
+  由來:使用者拍板。v22 把大師思考上限放寬到 2000ms 之後,等待感更重;查下去發現 startAiTurn 是
+    「先 setTimeout 假裝思考 thinkDelay 0.42~0.9 秒,**再**叫引擎算」——兩段**相加、不是重疊**,
+    而大師的引擎本來就真的在算 ⇒ 那段假思考是純浪費(v22 那輪的交接文件就把它列為「下一手最省力的一刀」)。
+  做:① AI_LEVELS.master 的 thinkDelay:[420,900] 換成 minThinkMs:240。
+     ② startAiTurn 的 delay 改成 config.thinkDelay ? randomInt(...) : 0(大師沒有 thinkDelay ⇒ 0,馬上開算)。
+     ③ 新增 finishPaced(move):引擎回得太快(一眼看穿的必勝/必擋)才補到 minThinkMs,免得「思考中...」閃一下就沒了、
+        棋子瞬間冒出來;它排在 aiTimer 上 ⇒ 重開/悔棋/換模式既有的 clearTimeout(aiTimer) 照樣取消得掉,
+        finish 自己還有 aiGen 世代守門(Worker 回來時世界變了就作廢)。
+     ★ 其他三檔的 thinkDelay **一字不動**:easy/normal/hard 幾乎瞬間就算完,沒有那個停頓會像作弊 —— 那是難度設計,不是浪費。
+  量:新增 scripts/measure-master-wait.mjs(npm run measure:wait;不在 npm test 裡)。量的是**畫面上的等待**
+     = 從人點下交點到電腦的子出現,不是引擎函式的內部耗時。同機 A/B(本機站、只把 /script.js 換成 HEAD 舊版、同一組 7 手 × 3 輪):
+       舊:中位 1151 / 1124 / 1416ms(平均 1321~1490,最快 734~990,最慢 2627~2832)
+       新:中位  535 /  674 /  623ms(平均  716~ 828,最快 408~436,最慢 1713~1836)  ⇒ 中位快約 0.5~0.8 秒
+     rAF 最大間隔 150~167ms 兩邊一樣(沒有換來新的卡頓)、console 零錯誤。
+     ⚠ 只跑一輪不算數:開局書有隨機性,同一組手會落在不同局面 ⇒ 至少三輪看中位數區間。
+     ⚠ 這是「量」不是「測」:不要給它門檻變成測試 —— HFP 機比 agape250 慢,有門檻就會在慢的那台假紅
+        (同族教訓:tests/ai-engine.test.mjs 那顆 VCT 題,700ms 預算在 HFP 機 3/3 紅、在 agape250 全綠)。
+  驗:npm run verify 全綠(vertag sw v23 / 前幾版 22 版不跳號 / 84 題重證 / ai-engine 31 綠);
+     scripts/smoke-ai.mjs 預設 master 12/12 + LEVEL=hard 12/12(本機)——
+     ★ 大師第一手 273ms = 開局書瞬間回、被 minThinkMs 補到 240 ⇒ 地板真的有在作用;困難第一手 453ms = 它的 thinkDelay 沒被動到。
+  📝 順手補帳(文件 drift):本檔在 v21 之後就沒更新過 —— v22(budgetMs 900→2000)只寫進了 skills repo 的大表/HANDOFF,
+     這裡的表頭與「下一手若要更強」都還停在 v21 的世界。表頭已補、那條就地加了「已完成」註記(不改寫原文)。
+  🧾 git 事實:本輪 commit 見 git log -1;⚠ 線上要等 push 觸發 CI 部署完才會是 v23,抓 sw 前先確認 CI 綠。
 
 ★★★★★ 2026-09-06 下午③(agape250 機・Fable 5.1・take-over 場)🧵 引擎搬 Web Worker + 🛡 困難檔接防守層 —— SW v20 → v21 ★★★★★
   🧾 git 事實(/handoff 交接時實查,不是憑印象):status --short 空・程式最後一顆 b5b44c0(本交接 commit 之後 HEAD 見 git log -1)・rev-list @{u}..HEAD = 0(真的推上去了)
@@ -21,7 +46,7 @@
   ⚠⚠ 補丁工具的坑(這一輪最貴的):我的 patch 幫手把字串取代包成 s.replace(re, () => b),**function replacer 不展開 $1**,
      於是 CLAUDE.md / README / roadmap / 本檔好幾行被寫成字面「$1」、被吃掉的原文(表格列、標題)得從 git 撈回來。
      ⇒ 規則:regex 取代要展開 $n 就傳字串 s.replace(re, str);要保留字面就用 split/join。已記進 silent-failure-patterns §56。
-  📋 下一手若要更強:Worker 已就位,把 AI_LEVELS.master.budgetMs 從 900 拉到 2000 也不會卡畫面(先問使用者要不要)。
+  📋 下一手若要更強:Worker 已就位,把 AI_LEVELS.master.budgetMs 從 900 拉到 2000 也不會卡畫面(先問使用者要不要)。  ⇒ ⚠ **已完成**:v22 拉到 2000(使用者拍板),連帶 v23 砍掉假思考,見本檔最上面那段。
 
 ★★★★★ 2026-09-06 下午②(agape250 機・Fable 5.1・take-over 場)🏷 版本號兩件套(鐵則⑦)—— SW v19 → v20 ★★★★★
   由來:0906 全艦隊普查本站 🔴(沒有版本號徽章與改版簡歷);使用者接著引擎那件點名「開工」。

@@ -1,6 +1,6 @@
 # roadmap — 3D 五子棋(chess5)
 
-更新:2026-09-04
+更新:2026-09-06
 
 ## ✅ 已完成(別重做)
 
@@ -8,6 +8,10 @@
   分層決策 成五 → 擋五 → VCF → 破對手 VCF → VCT → 擋活三/破連殺 → alpha-beta 疊代加深,戰術層借解題器的威脅空間搜尋(加了 `opts.deadline`);
   提示念理由;簡單/普通/困難不動。`tests/ai-engine.test.mjs` 24 項、`scripts/ai-bench.mjs` **6:0**(引擎每手 900ms=線上設定,平均 203~303ms/手;預算壓到 250ms 時 5:1、平均 82~137ms)、`scripts/smoke-ai.mjs` 8 項本機+線上綠。
 - **0906 🧵 引擎搬 Web Worker + 🛡 困難檔接防守層**(使用者拍板「兩個都做」;SW v21):`ai-worker.js` + `engineMoveAsync`(失敗退回同步)、`aiGen` 世代守門、提示先出「思考中」;困難 `defend:true` 只守不攻(400ms)、沒威脅走舊路;smoke-ai ⑥ 驗 Worker 模式 + rAF 最大間隔 < 400ms,`LEVEL=hard` 再跑一次;ai-engine 測試 24→31 項。
+- **0906 🧠 大師思考上限 900ms → 2000ms**(使用者拍板;SW v22):`AI_LEVELS.master.budgetMs` 一個數字;Worker 化之後放寬不再有卡畫面的代價。
+  ★ 量法用 61 題「解題器證明過必勝」的殘局,不要用自我對打(同引擎不同預算對打 8 局 3:3:2 看不出差別):招法對 58→59、**認出必勝 48→50**;曲線 900→48・1200→49・1500→50・2000→50(1500 就吃滿)。
+- **0906 ⏱ 砍掉大師的「假思考」**(使用者拍板;SW v23):`thinkDelay:[420,900]` → `minThinkMs:240` + `finishPaced`(引擎回太快才補到地板);其他三檔的 thinkDelay 是刻意的,不動。
+  同機 A/B(7 手 × 3 輪)中位 **1124~1416ms → 535~674ms**;新增 `scripts/measure-master-wait.mjs`(`npm run measure:wait`,量畫面上的等待,刻意不設門檻免得在慢機器假紅)。
 - **0906 🏷 版本號兩件套**(鐵則⑦;0906 普查本站 🔴 → 🟢;SW v20):左欄底摺疊改版簡歷 v20→v1 + 右下徽章問 SW 拿真版本;`tests/vertag.test.mjs` 守不漂;smoke-ai ⑤ 真瀏覽器驗徽章顯示對的版。
 
 - **2026-09-04 接續上一盤**(`gomoku.session` 從「只寫不讀」補成完整的一對):

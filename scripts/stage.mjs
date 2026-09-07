@@ -29,6 +29,7 @@ const SITE_FILES = [
   "puzzle-solver.js",
   "puzzles.js",
   "daily-picker.js",
+  "commentary.js",          // 🤖 電腦口白句庫(v25):script.js 的 import ⇒ 沒帶上去線上整支 script 載不起來
   "manifest.webmanifest",
   "service-worker.js",
   "icons",

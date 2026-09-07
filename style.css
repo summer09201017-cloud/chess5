@@ -763,3 +763,28 @@ body[data-skin="fruit"] .intersection.last-move::after {
 .ver-tag { margin: 4px 6px 8px; line-height: 1.65; }
 .ver-tag b { color: var(--text); }
 #appVerBadge { position: fixed; right: 6px; bottom: 4px; font-size: 11px; line-height: 1; opacity: .6; z-index: 2147483000; pointer-events: none; color: var(--text-soft); font-family: system-ui, sans-serif; }
+
+/* ⏸ 暫停蓋版(0907;實機截圖二修)
+   ⚠ 這行原本寫成「二修 (斜線星) 0907 二修 (星斜線)」——CSS 註解**不能嵌套**:
+     那個內層的結束符號會把整段註解提早關掉,底下第一條規則(.pause-veil 的 inset:0)就被當成
+     註解殘骸吃掉 ⇒ 蓋版縮成卡片大小、貼在左邊不居中。實機量出來 199px 寬才發現。
+     教訓:註解裡不要出現註解結束符號。
+   ★ 一修的兩個錯,都是「只在深色主題下看起來對」:
+     ① 卡片用 color:inherit ⇒ 木紋主題的深棕字落在深色卡片上,幾乎看不見。
+        ⇒ 卡片一律自帶深底+淺字,不吃主題色(四個主題都要讀得到)。
+     ② 蓋版加了 backdrop-filter: blur ⇒ 棋盤與旁白氣泡一起糊掉,老師想「暫停後看一下盤面」反而看不清。
+        ⇒ 只壓暗、不模糊;棋盤也不再額外套 filter(蓋版本身就夠表達「停住了」)。 */
+.pause-veil{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,12,16,.42)}
+.pause-veil[hidden]{display:none}
+.pause-card{text-align:center;padding:20px 28px;border-radius:14px;
+  background:#191c22;color:#f5f5f7;box-shadow:0 12px 36px rgba(0,0,0,.45);max-width:min(86vw,320px)}
+.pause-title{margin:0;font-size:1.45rem;font-weight:700;letter-spacing:.05em;color:#fff}
+.pause-sub{margin:6px 0 14px;font-size:.88rem;color:#c9cbd2}
+.pause-card button{font:inherit;font-weight:700;padding:8px 22px;border-radius:999px;cursor:pointer;
+  border:1px solid #f5f5f7;background:transparent;color:#f5f5f7}
+.pause-card button:hover{background:rgba(255,255,255,.16)}
+@media (prefers-reduced-motion: no-preference){
+  .pause-veil{animation:pauseIn .18s ease-out}
+  @keyframes pauseIn{from{opacity:0}}
+}

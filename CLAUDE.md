@@ -55,6 +55,9 @@
   ⚠ 使用者實際等待 = `thinkDelay`(0.42~0.9 秒)+ 引擎時間,**thinkDelay 是加在引擎之前的** ⇒ 最壞約 2.9 秒,典型約 0.7~1.2 秒。
   ⚠ `tests/ai-engine.test.mjs` 的 VCT 那題預算改用 2000(原本 call() 的 700):700ms 在**較慢的機器**上 VCT 來不及收工 ⇒ 招法仍對但 reason 掉成「往後算了 3 手」⇒ 那一行在 HFP 機紅、agape250 機綠。
   ★ 通則:凡是「要證明某個搜尋層跑得完」的測試,預算要對齊正式設定,否則測到的是這台機今天多快。
+- **2026-09-07 ⏸ 暫停 + 🤖 電腦口白**(使用者拍板「補只有暫停鈕和旁白兩樣」;SW **v25**):兩樣都是拿別人的站(決戰房市五子棋 5chess.pages.dev,《住宅週報》的宣傳遊戲)比較出來的缺口。
+  - **暫停**:`setPaused()` 狀態機。凍的是「會自己往前走的東西」——`stopTimer()` 只停 interval(**不可以用 `startTimer()` 當「繼續」:它會把兩邊剩餘秒數重設成滿鐘 = 偷送一整鐘**,所以另立 `resumeTimer()`);電腦想到一半就 `clearTimeout(aiTimer) + aiGen++` 讓那一手作廢(既有的世代守門會丟掉 Worker 的答案),繼續時重新 `startAiTurn()`——重算一手很便宜,比存起來簡單。棋盤點擊鎖收成 `applyInputLock()`(電腦在想 **或** 暫停中都鎖,兩邊各設一次會互相蓋掉)。悔棋/重做/提示一律擋。`canPause()`:線上對戰不給暫停(凍不住對手,按了只會自己超時)、已結束不給。重新開始/換模式走 `clearPause()` 而不是 `setPaused(false)`——後者會去叫 AI。快捷鍵 P;Esc 只在暫停中才接手(不然跟 `<dialog>` 的關閉搶)。
+  - **口白**:句庫在 `commentary.js`(純函式:`pickAiLine({level,situation,rand,avoid})` + `situationFromShape()`,零 DOM、rand 由呼叫方給 ⇒ 可測)。四難度四個角色(初學小白/穩穩下/守門員/老師傅)× 五情境(think/calm/block/attack/danger)。★ 跟舊的 `showCommentary()` 分工:那支講**棋盤事實**(活三/活四),這支講**電腦心情**;`showCommentary()` 改成回傳 boolean,有播報就不插口白(同一個氣泡不搶)。節流:開場句每三手一次、落子句每兩手一次。`lastShape` 存下棋型給口白判情境,不重算第二份判定。⚠ **只做字幕不做語音**:人聲鐵則是「要唸就烤 mp3 神經人聲」,五子棋沒語音包 ⇒ 不用 speechSynthesis 硬上。`tests/commentary.test.mjs` 另守語氣紅線(不准出現斷頭/破產/笨這類字眼——那是 A 站的毛病,學形式不學內容)。
 - **2026-09-07 ⛶ 手機放大鈕**(使用者拍板「棋類 9 站套直向放大鈕」;SW **v24**):右上角 `#mfsFull`(觸控裝置才顯示、進全螢幕就藏),按下 `requestFullscreen()` + `body.immersive`(收 `.panel-head`、`.board-3d` → `min(100%,900px,94vh)`;⚠ 第一版寫 94vmin,手機直向 94vmin=367 < 本來的 100%=390,反而縫小——vmin 在直向等於寬度,不能拿來「放大」),進出補發 resize。跨專案補丁 `~/.claude/skills/force-landscape-pwa/patches/add-portrait-zoom.mjs`,勿手改注入段。
 - **2026-09-06 ⏱ 砍掉大師的「假思考」**(使用者拍板;SW **v23**):`AI_LEVELS.master` 的 `thinkDelay:[420,900]` 換成 `minThinkMs:240`。
   原本 `startAiTurn` 是「先 `setTimeout` 假裝思考 0.42~0.9 秒,**再**叫引擎算」——兩段**相加不是重疊**,而大師的引擎本來就真的在算 ⇒ 那段等待純浪費。

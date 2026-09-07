@@ -19,16 +19,24 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v24/);
+assert.match(serviceWorker, /gomoku-pwa-v25/);
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);
 assert.match(serviceWorker, /"\.\/daily-picker\.js"/);
+assert.match(serviceWorker, /"\.\/commentary\.js"/);   // 🤖 口白句庫也是 import ⇒ 一樣要進快取
 assert.match(serviceWorker, /"\.\/ai-engine\.js"/);
 assert.match(serviceWorker, /"\.\/ai-worker\.js"/);   // 🧵 離線時 new Worker 抓不到 = 退回同步算(不壞但會凍),所以要進快取   // 🧠 少了它 cache.addAll 不會失敗,但離線時大師/提示會 import 不到而整支 script.js 掛掉
 assert.match(script, /from "\.\/puzzles\.js"/);
 assert.match(script, /from "\.\/puzzle-solver\.js"/);
 assert.match(script, /from "\.\/daily-picker\.js"/);
+assert.match(script, /from "\.\/commentary\.js"/);
+/* ⏸ 暫停三件套(0907):鈕、蓋版容器、狀態機。少一件就是「按了沒反應」或「蓋版關不掉」。 */
+assert.match(index, /id="pauseBtn"/);
+assert.match(index, /id="pauseVeil"/);
+assert.match(script, /function setPaused/);
+assert.match(script, /function resumeTimer/);   // 「繼續」不可以用 startTimer(會把剩餘秒數重設成滿鐘)
+assert.doesNotMatch(script, /paused[^\n]{0,40}=\s*!paused[^\n]{0,40}startTimer\(/);
 assert.match(script, /from "\.\/ai-engine\.js"/);
 /* 🏷 鐵則⑦ 兩件套(0906):詳細規則在 tests/vertag.test.mjs,這裡只守「還在」 */
 assert.match(index, /<details class="ver-fold">/);
@@ -95,7 +103,19 @@ assert.match(index, /id="resumeBtn"[^>]*hidden/, '#resumeBtn 預設要 hidden �
 assert.match(style, /\.action-row button\[hidden\]/);
 // ★★ 重播守門:沒有它,分享連結/匯入棋譜載入已分勝負的棋譜會讓勝場數加一(2026-09-04 前就存在的 bug)
 assert.match(script, /if \(replaying\) return;/);
-assert.match(script, /if \(!replaying\) \{ playClick\(\); showCommentary/);
+/* 「重播要安靜」的守法(0907 改寫:那一行從一行變成一個區塊,因為多了電腦口白)。
+   守的還是同一條:落子聲、棋型播報、電腦口白都必須關在 if (!replaying) 裡,
+   而且各自只有「一個定義 + 一個呼叫」——多一個裸呼叫就是重播時會出聲/冒泡。 */
+const quietBlock = (script.match(/if \(!replaying\) \{\r?\n([\s\S]{0,500}?)\r?\n  \}/) || [])[1] || "";
+assert.match(quietBlock, /playClick\(\)/, "落子聲要在 !replaying 區塊裡");
+assert.match(quietBlock, /showCommentary\(/, "棋型播報要在 !replaying 區塊裡");
+assert.match(quietBlock, /sayAiMoveLine\(/, "電腦口白要在 !replaying 區塊裡");
+// 只數「真正的呼叫形式」:註解裡提到函式名不算(0907 首跑就被自己的註解算成第三次)
+// 呼叫點要排掉「函式定義」那一行(定義的參數列長得跟呼叫一模一樣)——lookbehind 擋 function 前綴
+assert.equal((script.match(/(?<!function )showCommentary\(row, col, color\)/g) || []).length, 1, "showCommentary 只准有一個呼叫點");
+assert.equal((script.match(/function showCommentary\(/g) || []).length, 1, "showCommentary 只准有一個定義");
+assert.equal((script.match(/(?<!function )sayAiMoveLine\(row, col, color\)/g) || []).length, 1, "sayAiMoveLine 只准有一個呼叫點");
+assert.equal((script.match(/function sayAiMoveLine\(/g) || []).length, 1, "sayAiMoveLine 只准有一個定義");
 assert.match(script, /placeStone\(row, col, color, !replaying\)/);
 // 兩條重播路徑都要走 replaySilently,不可以再直接裸呼叫 commitMove 迴圈
 assert.match(script, /function replaySilently/);

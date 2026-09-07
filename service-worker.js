@@ -1,4 +1,4 @@
-const CACHE_NAME = "gomoku-pwa-v24";
+const CACHE_NAME = "gomoku-pwa-v25";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const CORE_ASSETS = [
   "./puzzle-solver.js",
   "./puzzles.js",
   "./daily-picker.js",
+  "./commentary.js",   // 🤖 電腦口白句庫:script.js 的 import ⇒ 不進快取,離線開整支 script 會載入失敗
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.png",

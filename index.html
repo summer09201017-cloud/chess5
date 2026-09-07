@@ -47,6 +47,7 @@ body.immersive .board-3d{width:min(100%,900px,94vh)}
         <button id="undoBtn" type="button" class="ghost" title="悔棋（玩家+電腦各一步）">⮌ 悔棋</button>
         <button id="redoBtn" type="button" class="ghost" title="重做剛才悔的棋">⮍ 重做</button>
         <button id="hintBtn" type="button" class="ghost" title="讓 AI 幫你建議下一步">💡 提示</button>
+        <button id="pauseBtn" type="button" class="ghost" aria-pressed="false" title="凍結計時與電腦思考（快捷鍵 P）">⏸ 暫停</button>
       </div>
 
       <details open>
@@ -162,6 +163,11 @@ body.immersive .board-3d{width:min(100%,900px,94vh)}
             落子音效
           </label>
         </div>
+          <div class="ctrl">
+            <label for="aiVoiceToggle">電腦旁白</label>
+            <input id="aiVoiceToggle" type="checkbox" checked>
+            <small class="hint">電腦下棋時用角色語氣講一句話（字幕）</small>
+          </div>
       </details>
 
       <details>
@@ -255,12 +261,12 @@ body.immersive .board-3d{width:min(100%,900px,94vh)}
 
       <details class="ver-fold">
 
-        <summary>版本 v24(2026-09-07)・看看前幾版做了什麼</summary>
+        <summary>版本 v25(2026-09-07)・看看前幾版做了什麼</summary>
 
         <p id="verTag" class="ver-tag">
 
-          版本 v24(2026-09-07)⛶ <b>手機放大鈕</b>——右上角一顆放大鈕:收掉上方標題列、棋盤填滿可用寬度(平板/桌機最多 900px,橫向不超過螢幕高);Android 會連瀏覽器網址列一起收掉,iPhone 不支援網頁全螢幕也照樣放得大;再按一次縮回。<br>
-          前幾版:v23 ⏱ 「大師」不再假裝思考——以前電腦每一手都要先停 0.4~0.9 秒才開始算,現在按下去就直接開始想:實測每一手的等待從 1.1~1.4 秒降到 0.5~0.7 秒(快了一半),棋力一點都沒變。(2026-09-06)・v22 🧠 「大師」想得更久、看得更遠——每手思考上限由 0.9 秒放寬到 2 秒,更常真的算出必勝殺著而不只是「看起來不錯」;因為思考已搬到背景,畫面照樣不卡(2026-09-06)
+          版本 v25(2026-09-07)⏸ <b>暫停鈕</b>與 🤖 <b>電腦旁白</b>——動作列多一顆「⏸ 暫停」(鍵盤按 P 也可以):按下去每手倒數停住、電腦停止思考、棋盤蓋上「已暫停」;下課鐘響、臨時有人來講話,都不必被倒數逼著亂下或認輸,再按一次接著下,剩下的秒數原封不動。另外電腦下棋時會用角色語氣講一句話,四個難度四種個性(初學小白/穩穩下/守門員/老師傅),孩子比較有「有人陪我玩」的感覺;不想要可以在設定裡關掉「電腦旁白」。線上對戰不給暫停——凍得住自己這邊、凍不住對手。<br>
+          前幾版:v24 ⛶ 手機放大鈕——右上角一顆放大鈕:收掉上方標題列、棋盤填滿可用寬度(平板/桌機最多 900px,橫向不超過螢幕高);Android 會連瀏覽器網址列一起收掉,iPhone 不支援網頁全螢幕也照樣放得大;再按一次縮回。(2026-09-07)・v23 ⏱ 「大師」不再假裝思考——以前電腦每一手都要先停 0.4~0.9 秒才開始算,現在按下去就直接開始想:實測每一手的等待從 1.1~1.4 秒降到 0.5~0.7 秒(快了一半),棋力一點都沒變。(2026-09-06)・v22 🧠 「大師」想得更久、看得更遠——每手思考上限由 0.9 秒放寬到 2 秒,更常真的算出必勝殺著而不只是「看起來不錯」;因為思考已搬到背景,畫面照樣不卡(2026-09-06)
 
           ・v21 🧵 電腦思考搬到背景執行緒——轉棋盤、按按鈕不再卡;「困難」學會擋活三、破連四(2026-09-06)
 
@@ -311,6 +317,13 @@ body.immersive .board-3d{width:min(100%,900px,94vh)}
         <canvas id="weatherCanvas" class="weather-canvas" aria-hidden="true"></canvas>
         <canvas id="confettiCanvas" class="confetti-canvas" aria-hidden="true"></canvas>
         <div id="commentaryBubble" class="commentary" aria-live="polite" hidden></div>
+        <div id="pauseVeil" class="pause-veil" role="status" hidden>
+          <div class="pause-card">
+            <p class="pause-title">⏸ 已暫停</p>
+            <p class="pause-sub">計時與電腦思考都停住了</p>
+            <button type="button" id="pauseResumeBtn">▶ 繼續</button>
+          </div>
+        </div>
         <div id="board3d" class="board-3d">
           <div class="board-base"></div>
           <div id="boardSurface" class="board-surface">

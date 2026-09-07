@@ -4,6 +4,7 @@ import { createTouchLens, paintBoardNeighborhood } from "./touch-lens.js";   // 
 import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
 import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
 import { pickDailySet, dailyKey, shiftKey, DAILY_KEEP_DAYS } from "./daily-picker.js";
+import { pickAiLine, situationFromShape } from "./commentary.js";   // 🤖 電腦口白(純函式,句庫與挑句規則在那支;本檔只管什麼時候講)
 
 /* ============================================================
  * 3D 五子棋 — 全功能版
@@ -104,6 +105,12 @@ let onlineColor = null;
 let onlineLocked = false;
 let deferredInstallPrompt = null;
 let soundOn = true;
+let paused = false;              // ⏸ 暫停:凍結計時與電腦思考(0907)。線上對戰不給暫停——凍不住對手
+let resumeAiOnUnpause = false;   // 暫停時電腦正想到一半 ⇒ 那一手作廢(世代 +1),繼續時重新開始想
+let aiVoiceOn = true;            // 🤖 電腦口白開關(存進 gomoku.settings)
+let lastAiLine = "";             // 上一句口白:避免連兩次講一樣的
+let aiTurnNo = 0;                // 電腦第幾次出手(拿來節流:不要每一手都講話)
+let lastShape = null;            // 最後一手造成的棋型 { color, liveThrees, liveFours, fours }(showCommentary 算好的,口白拿來判情境,不重算一份)
 let stats = { black:0, white:0, draw:0, streak:0, lastWinner:null, sizesPlayed:[], achievements:[] };
 
 // 這些必須在 top-level 就 hoist 完成，否則 attachEvents() 透過 spawnWeather/playClick 等
@@ -138,6 +145,10 @@ const themeSelect = $("themeSelect");
 const skinSelect = $("skinSelect");
 const weatherSelect = $("weatherSelect");
 const soundToggle = $("soundToggle");
+const pauseBtn = $("pauseBtn");
+const pauseVeil = $("pauseVeil");
+const pauseResumeBtn = $("pauseResumeBtn");
+const aiVoiceToggle = $("aiVoiceToggle");
 const resumeBtn = $("resumeBtn");
 const commentaryBubble = $("commentaryBubble");
 const weatherCanvas = $("weatherCanvas");
@@ -285,7 +296,7 @@ function buildIntersections() {
 /* ---------- 6. 落子核心 ---------- */
 function onPointClick(event) {
   if (lensSuppressClick && event.currentTarget === lensSuppressClick) { lensSuppressClick = null; return; }   // 🔍 拖到別格放開:原格的 click 不算
-  if (gameOver || aiThinking || replayIndex !== null) return;
+  if (gameOver || aiThinking || paused || replayIndex !== null) return;
   const p = event.currentTarget;
   const row = Number(p.dataset.row);
   const col = Number(p.dataset.col);
@@ -339,7 +350,11 @@ function commitMove(row, col, color) {
   redoStack = [];
   placeStone(row, col, color, !replaying);   // 重播:不播落下動畫
   setLastMove(row, col);
-  if (!replaying) { playClick(); showCommentary(row, col, color); }   // 重播:不放 N 次落子聲、不跳 N 次旁白
+  if (!replaying) {
+    playClick();
+    const toldShape = showCommentary(row, col, color);   // 重播:不放 N 次落子聲、不跳 N 次旁白
+    if (!toldShape && mode === "pve" && color !== humanColor) sayAiMoveLine(row, col, color);
+  }
 
   const win = checkWinFull(row, col, color);
   if (win) {
@@ -388,6 +403,7 @@ function setLastMove(row, col) {
 }
 
 function finalizeGame(winnerColor) {
+  clearPause();   // ⏸ 這局結束了:暫停沒有意義,按鈕轉灰
   stopTimer();
   if (winnerColor) {
     updateStatus(`${playerLabel(winnerColor)} 獲勝 🎉`);
@@ -470,7 +486,7 @@ function undoMove() {
     if (currentPuzzle != null) { bubble("解謎模式：悔棋 = 整題重試"); loadPuzzle(currentPuzzle, { retry: true }); }
     return;
   }
-  if (moveHistory.length === 0 || aiThinking) return;
+  if (moveHistory.length === 0 || aiThinking || paused) return;
   // 在 PvE 一次回兩步（玩家+AI），其他模式回一步
   const steps = (mode === "pve" && moveHistory.length >= 2) ? 2 : 1;
   for (let i = 0; i < steps; i++) {
@@ -500,7 +516,7 @@ function undoMove() {
 
 function redoMove() {
   if (replayIndex !== null || isPuzzleMode()) return;
-  if (redoStack.length === 0 || aiThinking) return;
+  if (redoStack.length === 0 || aiThinking || paused) return;
   const m = redoStack.pop();
   commitMove(m.row, m.col, m.color);
 }
@@ -522,7 +538,7 @@ function hintKey() {
 
 function showHint() {
   if (isPuzzleMode()) return puzzleShowHint();   // 解謎/每日的提示要用解題器的正解,不是對局 AI 的建議
-  if (gameOver || aiThinking || hintBusy) return;
+  if (gameOver || aiThinking || hintBusy || paused) return;
 
   const key = hintKey();
   if (hintCache && hintCache.key === key) { revealHint(hintCache); return; }
@@ -604,8 +620,11 @@ function engineMoveAsync(fn, color, opts) {
 function startAiTurn() {
   if (gameOver || mode !== "pve") return;
   if (currentPlayer === humanColor) return;
+  if (paused) return;   // ⏸ 暫停中不開始想(繼續時 setPaused 會再叫一次)
   const config = AI_LEVELS[aiLevelInput.value] || AI_LEVELS.normal;
   setAiThinking(true);
+  aiTurnNo++;
+  if (aiTurnNo % 3 === 1) sayAiLine("think");   // 每三手講一次「我想想」,不要每手都講
   updateStatus(`${playerLabel(currentPlayer)}（${config.label}）思考中...`);
   clearTimeout(aiTimer);
   const gen = ++aiGen;
@@ -667,7 +686,11 @@ function startAiTurn() {
 
 function setAiThinking(v) {
   aiThinking = v;
-  intersections.style.pointerEvents = v ? "none" : "auto";
+  applyInputLock();
+}
+/* 棋盤能不能點,由兩件事決定:電腦在想、或是暫停中。收在一個函式裡算,免得兩邊各設一次互相蓋掉。 */
+function applyInputLock() {
+  intersections.style.pointerEvents = (aiThinking || paused) ? "none" : "auto";
 }
 
 function chooseAiMove(config, aiColor, skipEngine = false) {
@@ -937,15 +960,116 @@ function refreshTimerUi() {
   whiteTimerEl.classList.toggle("urgent", perMoveSeconds > 0 && timerRemain.white <= 5);
 }
 
+/* ⏸ 繼續:只把 interval 接回去,**不重設剩餘秒數** —— startTimer() 會把兩邊都設回滿鐘,
+   用它來「繼續」等於偷偷送你一整鐘,那就不是暫停而是重新計時了。 */
+function resumeTimer() {
+  if (timerInterval || perMoveSeconds <= 0 || gameOver || replaying || isPuzzleMode()) return;
+  refreshTimerUi();
+  timerInterval = setInterval(tickTimer, 1000);
+}
+
 function stopTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   blackTimerEl.classList.remove("active", "urgent");
   whiteTimerEl.classList.remove("active", "urgent");
 }
 
+/* ---------- 11b. 暫停(0907 使用者拍板:「決戰房市五子棋」有、我們沒有,而教室最需要的就是這個)----------
+   ★ 暫停要凍住的是**會自己往前走的東西**:每手倒數計時、電腦的思考。
+     棋盤本身不會自己動,但要擋住點擊,不然暫停中還能下棋。
+   ★ 線上對戰不給暫停:凍得住自己這邊,凍不住對手 —— 按了只會讓自己超時。按鈕會 disabled 並說明原因。
+   ★ 電腦想到一半被暫停:那一手直接作廢(clearTimeout + 世代 +1,既有的世代守門會把 Worker 的答案丟掉),
+     繼續時重新開始想。比「把算好的答案存起來」簡單得多,而五子棋重算一手很便宜。 */
+function canPause() { return !gameOver && mode !== "online" && replayIndex === null; }
+
+function setPaused(v, opts = {}) {
+  const want = !!v && canPause();
+  if (want === paused) { refreshPauseUi(); return; }
+  paused = want;
+  if (paused) {
+    stopTimer();                       // 只停 interval:timerRemain 留在原地
+    resumeAiOnUnpause = aiThinking;
+    if (aiThinking) { clearTimeout(aiTimer); aiGen++; setAiThinking(false); }
+    clearTimeout(bubbleTimer);
+    commentaryBubble.hidden = true;    // 暫停時不要留著半句話在畫面上
+  } else {
+    resumeTimer();
+    if (resumeAiOnUnpause) {
+      resumeAiOnUnpause = false;
+      if (!gameOver && mode === "pve" && currentPlayer !== humanColor) startAiTurn();
+    }
+  }
+  applyInputLock();
+  refreshPauseUi();
+  /* 刻意不冒泡:蓋版卡片本身就寫著「已暫停」,而氣泡的位置在蓋版底下(z-index 較低)⇒ 只會糊成一團。
+     鈕字也同步變成「▶ 繼續」,狀態不會沒人講。 */
+}
+
+function togglePause() { setPaused(!paused); }
+
+function clearPause() {   // 重新開始/換模式:直接清狀態,不要走 setPaused(false) 的「繼續」副作用(會去叫 AI)
+  paused = false;
+  resumeAiOnUnpause = false;
+  applyInputLock();
+  refreshPauseUi();
+}
+
+function refreshPauseUi() {
+  if (pauseVeil) pauseVeil.hidden = !paused;
+  document.body.classList.toggle("paused", paused);
+  if (!pauseBtn) return;
+  pauseBtn.textContent = paused ? "▶ 繼續" : "⏸ 暫停";
+  pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
+  pauseBtn.disabled = !paused && !canPause();
+  pauseBtn.title = mode === "online"
+    ? "線上對戰不能暫停(對手還在下)"
+    : gameOver ? "這局已結束" : "凍結計時與電腦思考(快捷鍵 P)";
+}
+
+/* ---------- 11c. 🤖 電腦口白(句庫在 commentary.js)----------
+   ★ 跟舊的 showCommentary() 分工:那支講**棋盤上的事實**(活三/活四/雙四),這支講**電腦的心情**。
+     同一手若已經有棋型播報,就不插口白 —— 兩句話搶同一個氣泡會變跑馬燈,而棋型那句對玩家更重要。
+   ★ 只做字幕不做語音:本系列人聲鐵則是「要唸就得用預烤 mp3 神經人聲」,五子棋沒有語音包 ⇒ 不用機器聲硬上。 */
+function sayAiLine(situation) {
+  if (!aiVoiceOn || replaying || paused || gameOver) return false;
+  const level = (aiLevelInput && aiLevelInput.value) || "normal";
+  const line = pickAiLine({ level, situation, rand: Math.random(), avoid: lastAiLine });
+  if (!line) return false;
+  lastAiLine = line.text;
+  bubble("🤖 " + line.name + ":" + line.text, 2400);
+  return true;
+}
+
+/* 電腦剛下完那一手 ⇒ 從棋型推情境,講一句。節流:每兩手才講一次(整局都在講話會很吵)。 */
+function sayAiMoveLine(row, col, aiColor) {
+  if (!aiVoiceOn || mode !== "pve" || replaying) return;
+  if (aiTurnNo % 2 === 0) return;
+  const shape = lastShape && lastShape.color === aiColor ? lastShape : { liveThrees: 0, liveFours: 0, fours: 0 };
+  const humanThreats = lastShape && lastShape.color !== aiColor ? (lastShape.liveThrees + lastShape.fours) : 0;
+  sayAiLine(situationFromShape({
+    aiLiveThrees: shape.liveThrees,
+    aiFours: shape.fours + shape.liveFours,
+    humanThreats,
+    blocked: touchesOpponentLine(row, col, aiColor),
+  }));
+}
+
+/* 這一手是不是踩在對手的線上(= 擋)。近似判法:八個方向裡有沒有一邊緊貼著對手 2 顆以上。
+   夠用就好 —— 它只決定講哪一句話,判錯的代價是「話講得不夠貼切」,不是下錯棋。 */
+function touchesOpponentLine(row, col, color) {
+  const other = color === "black" ? "white" : "black";
+  for (const [dx, dy] of DIRECTIONS) {
+    if (countDir(row, col, dx, dy, other).count >= 2) return true;
+    if (countDir(row, col, -dx, -dy, other).count >= 2) return true;
+  }
+  return false;
+}
+
 /* ---------- 12. 重新開始 ---------- */
 function resetGame(opts = {}) {
   window.__matchT0 = Date.now();   // 📊 給 finalizeGame 的 -done 算「本局秒數」用
+  clearPause();                    // ⏸ 新局一定從「沒暫停」開始(暫停中按重新開始也要能開得起來)
+  aiTurnNo = 0; lastAiLine = ""; lastShape = null;
   clearTimeout(aiTimer);
   setAiThinking(false);
   boardState = createEmptyBoard(BOARD_SIZE);
@@ -1056,11 +1180,14 @@ function showCommentary(row, col, color) {
     if (stones === 4 && open === 2) liveFours++;
     if (stones === 4 && open >= 1) fours++;
   }
+  lastShape = { color, liveThrees, liveFours, fours };   // 🤖 口白拿它判情境(不重算一份,改判定只改這裡)
   const who = color === "black" ? "黑棋" : "白棋";
-  if (liveFours >= 1) bubble(`${who}活四！下一手致勝 🔥`);
-  else if (fours >= 2) bubble(`${who}雙四！致命攻擊 ⚔️`);
-  else if (liveThrees >= 2) bubble(`${who}雙活三！漂亮 ✨`);
-  else if (liveThrees === 1) bubble(`${who}活三 ↗`);
+  /* 回傳「有沒有播報」:有的話 commitMove 就不再插電腦口白(同一個氣泡不搶) */
+  if (liveFours >= 1) { bubble(`${who}活四！下一手致勝 🔥`); return true; }
+  if (fours >= 2) { bubble(`${who}雙四！致命攻擊 ⚔️`); return true; }
+  if (liveThrees >= 2) { bubble(`${who}雙活三！漂亮 ✨`); return true; }
+  if (liveThrees === 1) { bubble(`${who}活三 ↗`); return true; }
+  return false;
 }
 
 /* ---------- 15. 戰績 / 成就 ---------- */
@@ -1109,6 +1236,7 @@ function loadPersistedSettings() {
     if (raw.weather) document.body.dataset.weather = raw.weather;
     if (raw.boardSize) BOARD_SIZE = raw.boardSize;
     if (typeof raw.sound === "boolean") soundOn = raw.sound;
+    if (typeof raw.aiVoice === "boolean") aiVoiceOn = raw.aiVoice;
     if (raw.aiLevel) aiLevelInput.value = raw.aiLevel;
     if (raw.mode) mode = raw.mode;
     if (raw.humanColor) humanColor = raw.humanColor;
@@ -1127,6 +1255,7 @@ function loadPersistedSettings() {
   if (forbiddenToggle) forbiddenToggle.checked = forbiddenOn;
   if (timerModeSelect) timerModeSelect.value = String(perMoveSeconds);
   if (soundToggle) soundToggle.checked = soundOn;
+  if (aiVoiceToggle) aiVoiceToggle.checked = aiVoiceOn;
   document.body.dataset.mode = mode;
   document.querySelectorAll('input[name="playerColor"]').forEach(r => r.checked = (r.value === humanColor));
 }
@@ -1137,6 +1266,7 @@ function saveSettings() {
     weather: document.body.dataset.weather,
     boardSize: BOARD_SIZE,
     sound: soundOn,
+    aiVoice: aiVoiceOn,
     aiLevel: aiLevelInput.value,
     mode,
     humanColor,
@@ -2023,10 +2153,25 @@ function drawConfetti() {
 
 /* ---------- 24. 事件綁定 ---------- */
 function attachEvents() {
+  /* ⏸ 暫停:鈕、蓋版上的繼續、鍵盤 P(Esc 只在暫停中才接手 —— 不然會跟 dialog 的關閉搶) */
+  if (pauseBtn) pauseBtn.addEventListener("click", togglePause);
+  if (pauseResumeBtn) pauseResumeBtn.addEventListener("click", () => setPaused(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;   // 在輸入框裡打 p 不該暫停
+    if (document.querySelector("dialog[open]")) return;
+    const k = (e.key || "").toLowerCase();
+    if (k === "p" || (k === "escape" && paused)) { e.preventDefault(); togglePause(); }
+  });
+  if (aiVoiceToggle) aiVoiceToggle.addEventListener("change", () => {
+    aiVoiceOn = aiVoiceToggle.checked;
+    saveSettings();
+    bubble(aiVoiceOn ? "🤖 電腦旁白:開" : "🤖 電腦旁白:關", 1400);
+  });
   // 模式
   modeSelect.addEventListener("change", () => {
     mode = modeSelect.value;
     document.body.dataset.mode = mode;
+    clearPause();   // ⏸ 換模式(尤其換到線上)先把暫停清掉,免得留一個關不掉的蓋版
     saveSettings();
     if (mode === "puzzle") {
       const idx = Number($("puzzleSelect").value || 0);

@@ -2474,3 +2474,56 @@ function updateStatus(t) { statusEl.textContent = t; }
     else { ask(); setTimeout(() => { if (!got) el.textContent = "🏷️ 版本 —（讀不到，重整一次即顯示）"; }, 1500); }
   }, 1600);
 })();
+
+/* ══════════ ⛶ 沉浸模式的浮動工具列(2026-09-08)══════════
+   使用者 0908 實機退件:「手機上的全螢幕,不是真的全螢幕,還能看到一半的選單」。
+   style.css 的 body.immersive 那一段現在把整片 .panel 藏掉了 ⇒ 提示/悔棋/重做/重新開始/暫停
+   就沒地方按 ⇒ 補一條浮在上緣的小工具列(#immersiveHud,標記在 index.html)。
+   ★ 這幾顆**只代按**原本那幾顆鈕(dispatch 一個真的 click),不自己實作第二份邏輯 ——
+     自己實作的那一天就會和主程式分岔,而且不會有任何測試變紅。 */
+(function immersiveHud() {
+  try {
+    const hud = $("immersiveHud");
+    const out = $("immersiveStatus");
+    const statusEl = $("status");
+    if (!hud || !out || !statusEl) return;
+
+    hud.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-proxy]");
+      if (!btn) return;
+      const src = document.getElementById(btn.dataset.proxy);
+      if (src) src.click();
+    });
+
+    /* 原鈕 disabled/hidden 的時候,代按鈕也要跟著暗掉 —— 不然按了沒反應,
+       使用者會以為全螢幕壞了(而他是對的:那顆鈕在這個狀態本來就不能按)。
+       ★★ 兩道防無限迴圈,兩道都要有(0908 實際炸過一次:整頁卡死,
+          連 DOMContentLoaded 都不發,Playwright 開這一頁直接逾時、查了三輪才找到):
+          ① 只有值**真的變了**才寫 —— 就算寫進去的是同一個字串,
+             textContent = x 也算一次 mutation,觀察者會再被叫起來 ⇒ 無窮迴圈。
+          ② 從工具列自己身上發出的 mutation 直接略過。 */
+    function sync() {
+      const btns = hud.querySelectorAll("button[data-proxy]");
+      for (let i = 0; i < btns.length; i++) {
+        const src = document.getElementById(btns[i].dataset.proxy);
+        const want = !src || src.disabled || src.hidden;
+        if (btns[i].disabled !== want) btns[i].disabled = want;
+      }
+      const txt = statusEl.textContent || "";
+      if (out.textContent !== txt) out.textContent = txt;
+    }
+    sync();
+    new MutationObserver((recs) => {
+      for (let i = 0; i < recs.length; i++) {
+        const t = recs[i].target;
+        const n = t && t.nodeType === 1 ? t : (t ? t.parentNode : null);
+        if (n && (hud.contains(n) || out === n || out.contains(n))) continue;
+        sync();
+        return;
+      }
+    }).observe(document.body, {
+      subtree: true, childList: true, characterData: true,
+      attributes: true, attributeFilter: ["disabled", "hidden", "aria-pressed"],
+    });
+  } catch (e) { /* 工具列壞掉不可以連遊戲一起拖下水 */ }
+})();

@@ -757,6 +757,76 @@ body[data-skin="fruit"] .intersection.last-move::after {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ══════════ ⛶ 放大鈕的「真的全螢幕」(2026-09-08)══════════
+   使用者 0908 實機退件:「手機上的全螢幕,不是真的全螢幕,還能看到一半的選單」。
+   ★ v24 那顆放大鈕是通用補丁(force-landscape-pwa/add-portrait-zoom)打的,
+     它只做兩件事:藏掉 .panel-head、把 .board-3d 放寬。可是本站的**整片控制面板**
+     (.action-row + 十幾個 <details>)是 .panel 的其他部分,一個字都沒被藏起來。
+     實機量出來:390×844 的手機按下放大之後 —— 棋盤還是 390×390(一點都沒變大)、
+     選單從 y=449 一路排到畫面外(頁面總高 1480),所以「還看得到一半的選單」是真的,
+     而且「放大」其實什麼都沒放大。
+   ⇒ 這一段(本站自己的 CSS,不是那支通用補丁)把 immersive 做成真的:
+     ① .panel 整片藏掉、頁面不再捲動
+     ② .scene-wrap 固定蓋滿視窗、棋盤置中
+     ③ 選單藏了就沒有提示/悔棋/重新開始可按 ⇒ 補一條浮在上緣的小工具列(#immersiveHud),
+        它只是「代按」原本那幾顆鈕(邏輯只有一份,不會分岔)
+   ★ 棋盤為什麼還是 390:五子棋盤是正方形,直向手機能放的最大正方形就是螢幕寬。
+     所以這一版拿回來的是「整個螢幕只有棋盤」,不是把棋盤變大 —— 誠實寫在這裡,
+     免得下一手以為量錯了。 */
+body.immersive { overflow: hidden; }
+body.immersive .panel { display: none !important; }
+body.immersive .app { grid-template-columns: minmax(0, 1fr); gap: 0; width: 100%; }
+body.immersive .scene-wrap {
+  position: fixed; inset: 0; z-index: 30;
+  margin: 0; width: 100vw; height: 100vh; height: 100dvh; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 18% 12%, var(--bg-1) 0%, var(--bg-2) 38%, var(--bg-3) 85%);
+}
+body.immersive .scene-wrap .scene {
+  width: 100vw; height: 100vh; height: 100dvh; min-height: 0;
+}
+/* 蓋掉那支通用補丁的 width:min(100%,900px,94vh) —— 這裡同時吃寬與高,橫向才不會超出。
+   ⚠ 不要留邊(96vw 那種):棋盤是正方形,直向能放的最大正方形就是螢幕寬,
+     留 4% 的邊等於比「沒按放大」的時候還小 —— 那是把放大鈕做成縮小鈕。
+     實測 390×844:96vw = 374 < 原本的 390(我自己第一版就踩到,量出來才發現)。 */
+body.immersive .scene-wrap .board-3d {
+  width: min(100vw, 100dvh, 900px);
+}
+
+/* ⛶ 沉浸模式的浮動工具列:半透明、浮在上緣,不佔棋盤的高度 */
+#immersiveHud { display: none; }
+body.immersive #immersiveHud {
+  position: fixed; z-index: 40;
+  top: 0; left: 0; right: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px;
+  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+           6px max(8px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, rgba(12, 9, 6, 0.86), rgba(12, 9, 6, 0.58) 78%, rgba(12, 9, 6, 0));
+}
+#immersiveHud button {
+  font: inherit; font-size: 13px; font-weight: 700;
+  min-height: 40px; padding: 6px 10px;
+  border-radius: 10px; cursor: pointer;
+  background: #2b241c; color: #f7f1e6; border: 1px solid #5c4c3a;
+}
+#immersiveHud button:disabled { opacity: 0.4; cursor: not-allowed; }
+#immersiveHud button.exit { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* 狀態文字(誰下、將要贏了、提示說什麼)—— 放下緣,浮層、可折行 */
+#immersiveStatus { display: none; }
+body.immersive #immersiveStatus {
+  position: fixed; z-index: 40;
+  left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  display: block; margin: 0; padding: 8px 10px;
+  border-radius: 12px; background: rgba(12, 9, 6, 0.82); color: #f7f1e6;
+  font-size: 13px; line-height: 1.55; font-weight: 700; text-align: center;
+}
+/* 手機橫向很矮:再縮一點 */
+@media (max-height: 500px) {
+  #immersiveHud button { min-height: 36px; padding: 4px 8px; font-size: 12px; }
+  body.immersive #immersiveStatus { font-size: 12px; padding: 6px 8px; }
+}
+
 /* 🏷 版本號+改版簡歷(鐵則⑦,0906):摺疊列 44px 好按;徽章顏色跟主題 --text-soft */
 .ver-fold { margin-top: 10px; font-size: 12.5px; color: var(--text-soft); }
 .ver-fold summary { cursor: pointer; font-weight: 700; padding: 10px 6px; }

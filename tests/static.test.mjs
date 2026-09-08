@@ -19,7 +19,7 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v25/);
+assert.match(serviceWorker, /gomoku-pwa-v26/);
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);
@@ -126,5 +126,43 @@ assert.ok(script.indexOf('const RESUMABLE_SIZES') < script.indexOf('offerResume(
   'RESUMABLE_SIZES 要宣告在 offerResume() 呼叫之前(const 不會像 function 那樣提升到可用)');
 // 開機那行「黑棋先手」不可以無條件蓋掉分享棋譜載好的狀態
 assert.match(script, /if \(moveHistory\.length === 0\) updateStatus\(`黑棋先手/);
+
+
+/* ══ ⛶ 「真的全螢幕」(2026-09-08 使用者實機退件)══
+   原話:「手機上的全螢幕,不是真的全螢幕,還能看到一半的選單」。
+   v24 那顆放大鈕是通用補丁(add-portrait-zoom)打的,它只藏 .panel-head、
+   本站整片控制面板(.action-row + 十幾個 details)一個字都沒被藏 ⇒
+   實機 390x844 量出來:按下放大之後棋盤還是 390(沒變大)、選單還看得到 395px、
+   頁面還能捲(總高 1582)。這一節守修好之後的三件事,免得下一手改版面時又漏掉。
+   ⚠ 這裡守的是「規則在不在」,版面實際多大只有真瀏覽器量得到
+     (scratchpad/chess5fs.mjs:選單 0px / 不捲動 / 棋盤 390 / 工具列 98px 浮層)。 */
+assert.match(style, /body\.immersive \.panel \{ display: none !important; \}/,
+  "immersive 要整片藏掉 .panel(不是只藏 .panel-head)");
+assert.match(style, /body\.immersive \{ overflow: hidden; \}/,
+  "immersive 不可以還能捲動");
+assert.match(style, /body\.immersive \.scene-wrap \{[\s\S]{0,400}?position: fixed; inset: 0;/,
+  "immersive 的 .scene-wrap 要固定蓋滿視窗");
+assert.match(style, /body\.immersive \.scene-wrap \.board-3d \{\s*width: min\(100vw, 100dvh, 900px\);/,
+  "棋盤要吃滿螢幕寬(留邊會比沒按放大時更小 —— 那是把放大鈕做成縮小鈕)");
+// 選單藏了之後,提示/悔棋/重新開始要有別的地方按
+assert.match(index, /id="immersiveHud"/, "immersive 要有浮動工具列(不然選單藏了就沒鈕可按)");
+assert.match(index, /id="immersiveStatus"/, "immersive 要有浮層狀態文字");
+for (const proxy of ["hintBtn", "undoBtn", "redoBtn", "resetBtn", "pauseBtn", "mfsFull"]) {
+  assert.match(index, new RegExp(`data-proxy="${proxy}"`), `浮動工具列缺 ${proxy} 的代按鈕`);
+}
+// ★ 代按而不是自己實作第二份邏輯(自己實作的那天會分岔,而且不會有任何測試變紅)
+assert.match(script, /const src = document\.getElementById\(btn\.dataset\.proxy\);\s*\n\s*if \(src\) src\.click\(\);/,
+  "浮動工具列只准代按原鈕,不可以自己實作一份邏輯");
+// ★★ MutationObserver 的寫入一定要先比較 —— 寫同一個值也算一次 mutation,
+//    不比較就是無窮迴圈:0908 實際炸過,整頁卡死到連 DOMContentLoaded 都不發。
+assert.match(script, /if \(out\.textContent !== txt\) out\.textContent = txt;/,
+  "狀態鏡射要先比較再寫(不然 MutationObserver 自己觸發自己 ⇒ 整頁卡死)");
+assert.match(script, /if \(btns\[i\]\.disabled !== want\) btns\[i\]\.disabled = want;/,
+  "disabled 鏡射也要先比較再寫");
+assert.match(script, /if \(n && \(hud\.contains\(n\) \|\| out === n \|\| out\.contains\(n\)\)\) continue;/,
+  "工具列自己發出的 mutation 要略過(第二道防迴圈)");
+
+assert.match(script, /function immersiveHud\(\)/,
+  "浮動工具列的接線要住在 script.js(本站鐵則:index.html 不放內嵌 JS)");
 
 console.log("static tests passed");

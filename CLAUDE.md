@@ -11,7 +11,7 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-06)
+## 現況(2026-09-08)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
@@ -55,6 +55,22 @@
   ⚠ 使用者實際等待 = `thinkDelay`(0.42~0.9 秒)+ 引擎時間,**thinkDelay 是加在引擎之前的** ⇒ 最壞約 2.9 秒,典型約 0.7~1.2 秒。
   ⚠ `tests/ai-engine.test.mjs` 的 VCT 那題預算改用 2000(原本 call() 的 700):700ms 在**較慢的機器**上 VCT 來不及收工 ⇒ 招法仍對但 reason 掉成「往後算了 3 手」⇒ 那一行在 HFP 機紅、agape250 機綠。
   ★ 通則:凡是「要證明某個搜尋層跑得完」的測試,預算要對齊正式設定,否則測到的是這台機今天多快。
+- **2026-09-08 ⛶ 真的全螢幕**(使用者 0908 實機退件「手機上的全螢幕,不是真的全螢幕,還能看到一半的選單」;SW **v26**):
+  v24 那顆放大鈕是通用補丁打的,它只做 `.panel-head{display:none}` + 放寬 `.board-3d` ——
+  可是本站的**整片控制面板**(`.action-row` + 十幾個 `<details>`)是 `.panel` 的其他部分,一個字都沒被藏。
+  實機 390×844 量出來:按下放大之後棋盤還是 390(一點都沒變大)、選單還看得到 **395px**、頁面還能捲(總高 1582)。
+  ⇒ `style.css` 自己那一段(**不改注入段**)把 immersive 做成真的:`.panel` 整片 `display:none`、
+    `body{overflow:hidden}`、`.scene-wrap{position:fixed;inset:0}` 置中、`.board-3d → min(100vw,100dvh,900px)`。
+  ⚠ **不要留邊**:第一版寫 `96vw` = 374 < 原本的 390,等於把放大鈕做成縮小鈕(同 v24 的 94vmin 那個坑,同一個病第二次)。
+  選單藏了就沒鈕可按 ⇒ 新增 `#immersiveHud`(標記在 index.html、接線在 `script.js` 的 `immersiveHud()`,
+  本站鐵則:index.html 不放內嵌 JS)+ `#immersiveStatus`(鏡射 `#status`,浮在下緣)。
+  六顆鈕**只代按**原鈕(`src.click()`),不自己實作第二份邏輯。
+  ⚠⚠ MutationObserver 鏡射狀態文字**一定要先比較再寫**:`out.textContent = txt` 就算寫的是同一個字串
+    也算一次 mutation ⇒ 觀察者自己觸發自己 ⇒ 無窮迴圈,整頁卡死到**連 DOMContentLoaded 都不發**
+    (0908 實際炸過:Playwright 開這一頁直接逾時,而畫面上什麼錯誤都沒有)。第二道防線:
+    工具列自己發出的 mutation 直接 `continue`。兩道都在 `tests/static.test.mjs` 守著。
+  驗收:實機量測(390×844 直向)選單 0px、頁面不捲(844=844)、棋盤 390 吃滿寬、浮層工具列 98px = 視窗高 12%;
+    浮層六顆鈕真點擊(提示/悔棋/離開)全部有效、狀態文字同步、零 pageerror。
 - **2026-09-07 ⏸ 暫停 + 🤖 電腦口白**(使用者拍板「補只有暫停鈕和旁白兩樣」;SW **v25**):兩樣都是拿別人的站(決戰房市五子棋 5chess.pages.dev,《住宅週報》的宣傳遊戲)比較出來的缺口。
   - **暫停**:`setPaused()` 狀態機。凍的是「會自己往前走的東西」——`stopTimer()` 只停 interval(**不可以用 `startTimer()` 當「繼續」:它會把兩邊剩餘秒數重設成滿鐘 = 偷送一整鐘**,所以另立 `resumeTimer()`);電腦想到一半就 `clearTimeout(aiTimer) + aiGen++` 讓那一手作廢(既有的世代守門會丟掉 Worker 的答案),繼續時重新 `startAiTurn()`——重算一手很便宜,比存起來簡單。棋盤點擊鎖收成 `applyInputLock()`(電腦在想 **或** 暫停中都鎖,兩邊各設一次會互相蓋掉)。悔棋/重做/提示一律擋。`canPause()`:線上對戰不給暫停(凍不住對手,按了只會自己超時)、已結束不給。重新開始/換模式走 `clearPause()` 而不是 `setPaused(false)`——後者會去叫 AI。快捷鍵 P;Esc 只在暫停中才接手(不然跟 `<dialog>` 的關閉搶)。
   - **口白**:句庫在 `commentary.js`(純函式:`pickAiLine({level,situation,rand,avoid})` + `situationFromShape()`,零 DOM、rand 由呼叫方給 ⇒ 可測)。四難度四個角色(初學小白/穩穩下/守門員/老師傅)× 五情境(think/calm/block/attack/danger)。★ 跟舊的 `showCommentary()` 分工:那支講**棋盤事實**(活三/活四),這支講**電腦心情**;`showCommentary()` 改成回傳 boolean,有播報就不插口白(同一個氣泡不搶)。節流:開場句每三手一次、落子句每兩手一次。`lastShape` 存下棋型給口白判情境,不重算第二份判定。⚠ **只做字幕不做語音**:人聲鐵則是「要唸就烤 mp3 神經人聲」,五子棋沒語音包 ⇒ 不用 speechSynthesis 硬上。`tests/commentary.test.mjs` 另守語氣紅線(不准出現斷頭/破產/笨這類字眼——那是 A 站的毛病,學形式不學內容)。

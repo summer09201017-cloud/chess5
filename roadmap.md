@@ -1,9 +1,13 @@
 # roadmap — 3D 五子棋(chess5)
 
-更新:2026-09-06
+更新:2026-09-10
 
 ## ✅ 已完成(別重做)
 
+- **0910 🗂 全螢幕工具列可收起**(照抄 3D-Xiangqi 的「▲ 收起」;SW v27,`aeaee4d`):
+  `#immersiveHud` 最左邊加折疊鈕,收起藏掉提示/悔棋/重做/重新/暫停/離開全螢幕,只留折疊鈕本身;
+  狀態記 localStorage。本站是正方形棋盤,轉橫式不會讓棋盤變大(寬度本來就是限制項)⇒
+  沒有比照象棋站套「橫向自動滿版」。Playwright 4 項 + npm run verify 全綠,已部署上線並驗過。
 - **0906 大師檔 + 💡 提示換引擎 `ai-engine.js`**(使用者手機上原話「AI 提示太弱了,照提示下結果輸了,請加強 AI」;SW v19):
   分層決策 成五 → 擋五 → VCF → 破對手 VCF → VCT → 擋活三/破連殺 → alpha-beta 疊代加深,戰術層借解題器的威脅空間搜尋(加了 `opts.deadline`);
   提示念理由;簡單/普通/困難不動。`tests/ai-engine.test.mjs` 24 項、`scripts/ai-bench.mjs` **6:0**(引擎每手 900ms=線上設定,平均 203~303ms/手;預算壓到 250ms 時 5:1、平均 82~137ms)、`scripts/smoke-ai.mjs` 8 項本機+線上綠。

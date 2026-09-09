@@ -1,7 +1,24 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-06 深夜(HFP 機・Opus 5:⏱ 砍掉大師的「假思考」;SW v23)
-                                     前一版:2026-09-06(agape250 機:🧵 引擎搬 Worker + 🛡 困難檔防守層;SW v21)+ 同日 🧠 budgetMs 900→2000(SW v22)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
+                                     前一版:2026-09-08(HFP 機・Opus 5:⛶ 真的全螢幕 + ⏸ 暫停 + 🤖 電腦口白;SW v26)
 ================================================================================
+
+★★★★★ 2026-09-10(agape250 機・Sonnet 5・0909-take-over 場)🗂 全螢幕工具列可收起 —— SW v26 → v27 ★★★★★
+  由來:使用者拍板「照抄 3D-Xiangqi 的『▲ 收起』移植到 chess5 / xiangqi-arena」。本站的沉浸模式
+    工具列(`#immersiveHud`)是 0908 v26 做的「常駐浮層」,同一批文件早就記過「浮層永遠佔著版面」。
+  做:`#immersiveHud` 最左邊加 `#immersiveFoldBtn`(▲/▼),CSS `.folded > *:not(.fold-toggle)
+    {display:none}` 藏掉其餘 5 顆代按鈕,狀態記 `localStorage`(`chess5-immersive-fold-v1`)。
+  ⚠ 只改 `class`/`aria-expanded`,不碰 MutationObserver 的 `attributeFilter`
+    (`disabled`/`hidden`/`aria-pressed`)⇒ 不會觸發那套「鏡射代按鈕狀態」的無窮迴圈守門
+    (0908 才炸過一次,連 DOMContentLoaded 都不發)。
+  ★ 本站是正方形棋盤,轉橫式不會讓棋盤變大(寬度本來就是限制項,直向/橫向一樣)——manifest
+    orientation 維持 portrait,**沒有**比照象棋站套「橫向自動滿版」(那組修法只對「畫布本來
+    就有側欄擋著」的站有意義,本站沒有側欄問題)。
+  測試:npm run verify(lint + 7 個 test 檔,含 puzzles 84 題重證)全綠;Playwright 4 項
+    (進沉浸模式可見/折疊/展開/reload 後持久化)全綠。順手補齊「改版四處一起改」清單漏的
+    兩處:`tests/static.test.mjs` 硬編版號、CLAUDE.md「SW vN」(不補 `npm run verify` 會紅)。
+  部署:`npm run deploy`;線上驗過 sw v27 + immersiveFoldBtn 都在。
+  git 實況(交接前真的問過 git):status --short 空、HEAD aeaee4d、rev-list @{u}..HEAD = 0。
 
 ★★★★★ 2026-09-06 深夜(HFP 機・Opus 5)⏱ 砍掉大師的「假思考」—— SW v22 → v23 ★★★★★
   由來:使用者拍板。v22 把大師思考上限放寬到 2000ms 之後,等待感更重;查下去發現 startAiTurn 是

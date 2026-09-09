@@ -827,6 +827,16 @@ body.immersive #immersiveStatus {
   body.immersive #immersiveStatus { font-size: 12px; padding: 6px 8px; }
 }
 
+/* 🗂 可收起(2026-09-10,照抄 3D-Xiangqi 的「▲ 收起」)——
+   使用者:「浮層永遠佔著版面,收起式收起時棋盤看得更清楚」。折疊鈕本身永遠留著(排最前),
+   其餘按鈕一律藏起來(`*:not(.fold-toggle)` 不分標籤)。 */
+#immersiveHud .fold-toggle {
+  order: -1;
+  width: 34px; min-width: 34px; min-height: 34px; padding: 0;
+  font-size: 13px; line-height: 1;
+}
+#immersiveHud.folded > *:not(.fold-toggle) { display: none; }
+
 /* 🏷 版本號+改版簡歷(鐵則⑦,0906):摺疊列 44px 好按;徽章顏色跟主題 --text-soft */
 .ver-fold { margin-top: 10px; font-size: 12.5px; color: var(--text-soft); }
 .ver-fold summary { cursor: pointer; font-weight: 700; padding: 10px 6px; }

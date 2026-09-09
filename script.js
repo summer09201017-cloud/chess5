@@ -2495,6 +2495,28 @@ function updateStatus(t) { statusEl.textContent = t; }
       if (src) src.click();
     });
 
+    /* 🗂 可收起(2026-09-10,3D-Xiangqi 同款「▲ 收起」)——使用者:「浮層永遠佔著版面,
+       收起式收起時棋盤看得更清楚」。⚠ localStorage 在 Safari 私密模式會丟例外,讀寫都要包起來。 */
+    const foldBtn = $("immersiveFoldBtn");
+    if (foldBtn) {
+      const FOLD_KEY = "chess5-immersive-fold-v1";
+      let folded = false;
+      try { folded = localStorage.getItem(FOLD_KEY) === "1"; } catch (_) { /* 私密模式 */ }
+      const applyFold = () => {
+        hud.classList.toggle("folded", folded);
+        foldBtn.setAttribute("aria-expanded", String(!folded));
+        foldBtn.textContent = folded ? "▼" : "▲";
+        foldBtn.title = folded ? "展開工具列" : "收起工具列(棋盤看得更清楚)";
+      };
+      applyFold();
+      foldBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        folded = !folded;
+        try { localStorage.setItem(FOLD_KEY, folded ? "1" : "0"); } catch (_) { /* 私密模式 */ }
+        applyFold();
+      });
+    }
+
     /* 原鈕 disabled/hidden 的時候,代按鈕也要跟著暗掉 —— 不然按了沒反應,
        使用者會以為全螢幕壞了(而他是對的:那顆鈕在這個狀態本來就不能按)。
        ★★ 兩道防無限迴圈,兩道都要有(0908 實際炸過一次:整頁卡死,

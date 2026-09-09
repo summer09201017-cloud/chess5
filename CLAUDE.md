@@ -11,13 +11,14 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-08)
+## 現況(2026-09-10)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
 - 3D 棋盤旋轉/俯仰/縮放/自動旋轉、四種主題、五種棋子皮膚、四種天氣
 - 黑棋禁手(長連/雙四/雙三)、計時、悔棋/重做、AI 提示、棋譜匯入匯出/分享/回放、戰績成就
 - PWA 可安裝、離線可玩
+- **2026-09-10 🗂 全螢幕工具列可以收起來了**(照抄 3D-Xiangqi 的「▲ 收起」——使用者:「浮層永遠佔著版面,收起式收起時棋盤看得更清楚」;SW **v27**):`#immersiveHud` 最左邊加一顆 `#immersiveFoldBtn`,點下去用 `.folded` class 藏掉其餘 `data-proxy` 按鈕(只留折疊鈕本身),狀態記 `localStorage`(讀寫包 try/catch)。⚠ 只改 `class`/`aria-expanded`,不碰 MutationObserver 的 `attributeFilter`(`disabled`/`hidden`/`aria-pressed`)⇒ 不會觸發那套「鏡射代按鈕狀態」的迴圈守門。
 - **2026-09-01 修好「落子對不到十字交叉線」**(見下面「本機地雷」第 1 條)
 - **2026-09-02 殘局解謎重做**(使用者原話「只有 8 題,太少題目,又太簡單」):
   - 題庫 **67 題、四級**(入門 16・進階 16・高手 20・大師 15;黑先 34 / 白先 33),最深 7 步;由 `scripts/gen-puzzles.mjs` 自我對弈生成、

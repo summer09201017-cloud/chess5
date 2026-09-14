@@ -1,7 +1,15 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
-                                     前一版:2026-09-08(HFP 機・Opus 5:⛶ 真的全螢幕 + ⏸ 暫停 + 🤖 電腦口白;SW v26)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-14(HFP 機・Fable 5.1:🩹 拔掉 index.html 進 SW 快取地雷;SW v29)
+                                     前一版:2026-09-14(HFP 機:🎥 重置視角;SW v28)・2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
 ================================================================================
+
+★★★★★ 2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷 —— SW v28 → v29 ★★★★★
+  由來:3D-Chess 幻影版實機「裝成 App 打開就無法連上 / ERR_FAILED」。病根:Cloudflare Pages 把 /index.html 308 到 /,
+    SW 名單裡有 "./index.html" ⇒ install 存到 redirected:true 的回應 ⇒ 導覽拿到它瀏覽器拒收;每次 bump SW 重踩一次。使用者拍板全艦隊修。
+  改動:service-worker.js CORE_ASSETS 拔 "./index.html"、導覽退路 caches.match("./")、addAll → 逐一 add+catch、v28→v29
+    (補丁 static-pwa-ship/patches/patch-sw-index.mjs --cf --write);tests/static.test.mjs 硬編 v29 + 加守三條;index.html verTag v29(summary + 本版一句 + 前幾版);
+    CLAUDE.md 已完成寫一條 SW **v29**;manifest 早已是 ./ 沒動。
+  驗:npm run verify 全綠;線上 check-sw-nav-fleet.mjs 🟢(開 /index.html 兩次不 ERR_FAILED、快取無 redirected、離線回殼層)。
 
 ★★★★★ 2026-09-10(agape250 機・Sonnet 5・0909-take-over 場)🗂 全螢幕工具列可收起 —— SW v26 → v27 ★★★★★
   由來:使用者拍板「照抄 3D-Xiangqi 的『▲ 收起』移植到 chess5 / xiangqi-arena」。本站的沉浸模式

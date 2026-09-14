@@ -18,6 +18,7 @@
 - 3D 棋盤旋轉/俯仰/縮放/自動旋轉、四種主題、五種棋子皮膚、四種天氣
 - 黑棋禁手(長連/雙四/雙三)、計時、悔棋/重做、AI 提示、棋譜匯入匯出/分享/回放、戰績成就
 - PWA 可安裝、離線可玩
+- **2026-09-14 🩹 拔掉「index.html 進 SW 快取名單」地雷**(全艦隊六棋類站同修,3D-Chess 幻影版實錘「裝成 App 打開就無法連上 / ERR_FAILED」;SW **v29**):Cloudflare Pages 把 `/index.html` 308 到 `/`,`CORE_ASSETS` 裡有 `./index.html` ⇒ install 存到 redirected:true 的回應 ⇒ 導覽拿到它瀏覽器拒收,每次 bump SW 重踩。改動:名單拔 `./index.html`、導覽退路 `caches.match("./")`、`addAll` → 逐一 `add().catch()`;`tests/static.test.mjs` 加守「SW 零 index.html / 退路是 ./ / 不用 addAll」。補丁來源 skill `static-pwa-ship/patches/patch-sw-index.mjs`(--cf --write),線上重演 `scripts/check-sw-nav-fleet.mjs` 🟢。**永遠不要把 index.html 加回名單。**
 - **2026-09-14 🎥 多了「重置視角」**(全艦隊棋類體檢:本站是唯一「轉得動、卻沒有一顆鈕回到開場角度」的 3D 站;SW **v28**):左欄「視角」四顆預設下面加 `#resetViewBtn`,`script.js` 的 `resetView()` 回 `VIEW_HOME`(= rotation 初值 0/0/1.0)並關掉自動旋轉;全螢幕工具列加一顆 `data-proxy="resetViewBtn"` 代按(沿用 immersiveHud 的代按機制,不另寫邏輯)。驗收 `scripts/check-reset-view.mjs`(真點擊:拖曳/滑桿轉歪 → 按重置 → 三個值回初值、全螢幕代按鈕也回得去)。
 - **2026-09-10 🗂 全螢幕工具列可以收起來了**(照抄 3D-Xiangqi 的「▲ 收起」——使用者:「浮層永遠佔著版面,收起式收起時棋盤看得更清楚」;SW **v27**):`#immersiveHud` 最左邊加一顆 `#immersiveFoldBtn`,點下去用 `.folded` class 藏掉其餘 `data-proxy` 按鈕(只留折疊鈕本身),狀態記 `localStorage`(讀寫包 try/catch)。⚠ 只改 `class`/`aria-expanded`,不碰 MutationObserver 的 `attributeFilter`(`disabled`/`hidden`/`aria-pressed`)⇒ 不會觸發那套「鏡射代按鈕狀態」的迴圈守門。
 - **2026-09-01 修好「落子對不到十字交叉線」**(見下面「本機地雷」第 1 條)

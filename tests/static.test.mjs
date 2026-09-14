@@ -19,7 +19,11 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v28/);
+assert.match(serviceWorker, /gomoku-pwa-v29/);
+// 0914 全艦隊:CF 把 /index.html 308 到 / ⇒ 名單/退路有 index.html 就會快取到 redirected 回應 ⇒ 裝成 App 開就 ERR_FAILED(3D-Chess 實錘)
+assert.doesNotMatch(serviceWorker.replace(/^\s*\/\/.*$/gm, ""), /["'](\.\/|\/)?index\.html["']/, "service-worker.js 的名單 / 退路不得出現 index.html(只准 ./)");
+assert.match(serviceWorker, /caches\.match\("\.\/"\)/, "離線導覽退路要退 ./");
+assert.doesNotMatch(serviceWorker, /\.addAll\(/, "install 要逐一 add + catch,不用 addAll(一個檔抓不到就整批沒快取)");
 // 解謎題庫、解題器、每日抽題器都是 script.js 的 import ⇒ 必須進 SW 快取,否則離線開解謎會整個模組載入失敗(白畫面)
 assert.match(serviceWorker, /"\.\/puzzle-solver\.js"/);
 assert.match(serviceWorker, /"\.\/puzzles\.js"/);

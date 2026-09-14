@@ -94,6 +94,10 @@ npm run deploy      # = verify → stage → wrangler pages deploy .deploy
 **務必同時 bump `service-worker.js` 的 `CACHE_NAME`**（快取是 cache-first，
 不 bump 的話已安裝的 PWA 會一直用舊版），`tests/static.test.mjs` 內的版本號要一起改。
 
+⚠ **SW 快取名單與離線退路不可以有 `index.html`(0914 全艦隊修,SW v29)**:Cloudflare Pages 把 `/index.html` 308 到 `/`,
+名單裡有它 install 就存到 redirected 回應,裝成 App 打開就 ERR_FAILED(3D-Chess 實錘)。一律只認 `./`;`tests/static.test.mjs` 守著。
+補丁來源:skill `static-pwa-ship/patches/patch-sw-index.mjs`;線上重演 `scripts/check-sw-nav-fleet.mjs <url>` 要 🟢。
+
 ### 啟用自動部署需要的設定
 
 到 repo 的 `Settings → Secrets and variables → Actions` 新增兩個 secret：

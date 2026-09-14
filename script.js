@@ -2015,6 +2015,18 @@ function startAutoRotateLoop() {
   };
   requestAnimationFrame(tick);
 }
+/* 🎥 重置視角(2026-09-14 使用者拍板「五子棋補一顆重置視角」)。
+   和四顆預設的差別:預設是「換一個角度」,這顆是「回到開場」—— 開場就是 rotation 的初值(正視 0/0、zoom 1.0),
+   所以直接回初值,不另外抄一份數字(抄第二份的那天兩邊就會漂)。自動旋轉也關掉:重置完還在轉等於沒重置。
+   全螢幕工具列的「🎥 視角」是代按這顆(data-proxy),不自己實作第二份。 */
+const VIEW_HOME = { yaw: 0, pitch: 0, zoom: 1.0 };
+function resetView() {
+  rotation.autoSpin = false;
+  if (autoSpinInput) autoSpinInput.checked = false;
+  Object.assign(rotation, VIEW_HOME);
+  syncControls();
+  applyRotation();
+}
 function applyViewPreset(name) {
   const p = {
     flat:  { yaw: 0,   pitch: 0,   zoom: 1.0 },
@@ -2229,6 +2241,8 @@ function attachEvents() {
   document.querySelectorAll(".preset[data-preset]").forEach(b => {
     b.addEventListener("click", () => applyViewPreset(b.dataset.preset));
   });
+  const resetViewBtn = $("resetViewBtn");
+  if (resetViewBtn) resetViewBtn.addEventListener("click", resetView);
 
   // 外觀
   themeSelect.addEventListener("change", () => {

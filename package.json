@@ -13,6 +13,10 @@
     "deploy": "npm run verify && node scripts/stage.mjs && npx wrangler pages deploy .deploy --project-name=5-chess --branch=main --commit-dirty=true",
     "bench:ai": "node scripts/ai-bench.mjs",
     "smoke:ai": "node scripts/smoke-ai.mjs",
-    "measure:wait": "node scripts/measure-master-wait.mjs"
+    "measure:wait": "node scripts/measure-master-wait.mjs",
+    "check:reset": "node scripts/check-reset-view.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
   }
 }

@@ -409,6 +409,39 @@ body[data-theme="sakura"] .scene {
 }
 .board-3d.is-dragging { cursor: grabbing; transition: none; will-change: transform; }
 
+/* ══ 🧊 3D 立體 / 2D 平面(2026-09-20)══
+   body.view2d = 純平面:沒有透視、盤身側面藏掉、不能拖轉(和「3D 象棋對局場」的 2D 視角同一個意思),桌機手機一樣。
+   ★ 這幾行原本住在手機媒體查詢裡、**無條件**生效(0501 v8)⇒ 手機永遠看不到 3D;現在只跟著模式走。 */
+body.view2d .scene { perspective: none; }
+body.view2d .board-3d { transform-style: flat; cursor: default; }
+body.view2d .board-base { transform: none; }
+body.view2d .board-base::before,
+body.view2d .board-base::after { display: none; }
+body.view2d .board-surface { transform: none; transform-style: flat; }
+
+/* 切換鈕那一列:鈕上兩行字(現在是哪種 / 點了變哪種)+ 真 3D 版連結 */
+.view-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+button.view-mode {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  text-align: left;
+  min-height: 44px;
+}
+button.view-mode b { font-size: 1rem; }
+button.view-mode small { font-size: 0.78rem; opacity: 0.75; font-weight: 400; }
+button.view-mode[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
+.true3d-link { font-size: 0.85rem; white-space: nowrap; }
+
 .board-base {
   position: absolute;
   inset: 1.4%;
@@ -720,31 +753,23 @@ body[data-skin="fruit"] .intersection.last-move::after {
     order: 1;
     margin-inline: calc(50% - 50vw);
   }
+  /* 🧊 2026-09-20:這裡以前寫死 perspective:none / transform-style:flat / 盤側 display:none(0501 v8)⇒
+     手機**永遠**平面,四顆視角預設按了只是把棋盤壓扁 —— 使用者「手機看不到 3D」的病根。
+     那幾行搬到上面 body.view2d 那節,只在 2D 模式生效;這裡只剩版面尺寸。tests/static.test.mjs 守著不准加回來。 */
   .scene {
     width: 100vw;
     height: min(78dvh, 112vw);
     min-height: min(100vw, 560px);
     border-radius: 0;
     overflow: visible;
-    perspective: none;
     box-shadow: none;
   }
   .board-3d {
     width: min(100vw, 680px);
     --board-thickness: clamp(8px, 1.8vmin, 14px);
     --stone-size: 70%;
-    transform-style: flat;
-  }
-  .board-base {
-    transform: none;
-  }
-  .board-base::before,
-  .board-base::after {
-    display: none;
   }
   .board-surface {
-    transform: none;
-    transform-style: flat;
     box-shadow:
       inset 0 2px 2px rgba(255,255,255,0.16),
       inset 0 -5px 14px rgba(72, 39, 14, 0.18),

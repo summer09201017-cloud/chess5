@@ -11,13 +11,14 @@
   Netlify 端自動建置已停(`stop_builds`)。**留置一個月後再刪站**(照 netlify-to-cloudflare-migrate 慣例);
   還原點:Netlify deploy `6a96a4c9f62e310008e8a2a4`。
 
-## 現況(2026-09-10)
+## 現況(2026-09-20)
 
 ### 已完成
 - 9/13/15/19 四種盤面、單人對 AI(4 難度)、本機雙人、PeerJS 線上對戰、殘局解謎、每日挑戰
 - 3D 棋盤旋轉/俯仰/縮放/自動旋轉、四種主題、五種棋子皮膚、四種天氣
 - 黑棋禁手(長連/雙四/雙三)、計時、悔棋/重做、AI 提示、棋譜匯入匯出/分享/回放、戰績成就
 - PWA 可安裝、離線可玩
+- **2026-09-20 🧊 3D 立體 / 2D 平面 一鍵切換**(使用者:「平面版 chess5 是否也能加上 3D 與 2D 能切換,像 3D 象棋與西洋棋?」;照 3D 象棋對局場 / 3D 西洋棋 CO 的「視角模式」做法;SW **v30**):左欄最上面 `#viewModeBtn`(標籤永遠寫「現在是哪種 + 點了變哪種」,不靠 title)、全螢幕工具列 `data-proxy="viewModeBtn"`;`script.js` §22 `applyViewMode()/setViewMode()`,`viewMode` 進 `gomoku.settings`。2D = `body.view2d`(style.css:沒透視、盤身側面藏掉、不能拖轉、yaw/pitch/自動旋轉停用);3D 開場 `VIEW_HOME_3D`(yaw 0 / pitch 38 / 手機 zoom 0.92),`resetView()` 回**目前模式**的開場;四顆預設在 2D 按會自動切回 3D。★ 病根順手拔掉:手機媒體查詢(0501 v8)把 `perspective:none` / `transform-style:flat` 寫死 ⇒ 手機**永遠**平面、四顆預設按了只是壓扁 —— 那幾行搬到 `body.view2d` 下,`tests/static.test.mjs` 守「手機媒體查詢不准再無條件壓平」。另加 gomoku3d(WebGL 真 3D)連結。`scripts/check-reset-view.mjs`(npm run check:reset)改驗「回到目前模式的開場」+ 切換三件事。
 - **2026-09-14 🩹 拔掉「index.html 進 SW 快取名單」地雷**(全艦隊六棋類站同修,3D-Chess 幻影版實錘「裝成 App 打開就無法連上 / ERR_FAILED」;SW **v29**):Cloudflare Pages 把 `/index.html` 308 到 `/`,`CORE_ASSETS` 裡有 `./index.html` ⇒ install 存到 redirected:true 的回應 ⇒ 導覽拿到它瀏覽器拒收,每次 bump SW 重踩。改動:名單拔 `./index.html`、導覽退路 `caches.match("./")`、`addAll` → 逐一 `add().catch()`;`tests/static.test.mjs` 加守「SW 零 index.html / 退路是 ./ / 不用 addAll」。補丁來源 skill `static-pwa-ship/patches/patch-sw-index.mjs`(--cf --write),線上重演 `scripts/check-sw-nav-fleet.mjs` 🟢。**永遠不要把 index.html 加回名單。**
 - **2026-09-14 🎥 多了「重置視角」**(全艦隊棋類體檢:本站是唯一「轉得動、卻沒有一顆鈕回到開場角度」的 3D 站;SW **v28**):左欄「視角」四顆預設下面加 `#resetViewBtn`,`script.js` 的 `resetView()` 回 `VIEW_HOME`(= rotation 初值 0/0/1.0)並關掉自動旋轉;全螢幕工具列加一顆 `data-proxy="resetViewBtn"` 代按(沿用 immersiveHud 的代按機制,不另寫邏輯)。驗收 `scripts/check-reset-view.mjs`(真點擊:拖曳/滑桿轉歪 → 按重置 → 三個值回初值、全螢幕代按鈕也回得去)。
 - **2026-09-10 🗂 全螢幕工具列可以收起來了**(照抄 3D-Xiangqi 的「▲ 收起」——使用者:「浮層永遠佔著版面,收起式收起時棋盤看得更清楚」;SW **v27**):`#immersiveHud` 最左邊加一顆 `#immersiveFoldBtn`,點下去用 `.folded` class 藏掉其餘 `data-proxy` 按鈕(只留折疊鈕本身),狀態記 `localStorage`(讀寫包 try/catch)。⚠ 只改 `class`/`aria-expanded`,不碰 MutationObserver 的 `attributeFilter`(`disabled`/`hidden`/`aria-pressed`)⇒ 不會觸發那套「鏡射代按鈕狀態」的迴圈守門。

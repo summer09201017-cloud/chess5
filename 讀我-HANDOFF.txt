@@ -1,7 +1,41 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-14(HFP 機・Fable 5.1:🩹 拔掉 index.html 進 SW 快取地雷;SW v29)
-                                     前一版:2026-09-14(HFP 機:🎥 重置視角;SW v28)・2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-20(agape250 機・Fable 5.1:🧊 3D 立體 / 2D 平面 一鍵切換;SW v30)
+                                     前一版:2026-09-14(HFP 機:🩹 拔掉 index.html 進 SW 快取地雷;SW v29)・2026-09-14(HFP 機:🎥 重置視角;SW v28)・2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
 ================================================================================
+
+★★★★★ 2026-09-20(agape250 機・Fable 5.1・0920-gomoku3d-手機看不到真3D-喬治 場)🧊 3D 立體 / 2D 平面 一鍵切換 —— SW v29 → v30 ★★★★★
+  由來:使用者早上先問「手機上為何看不到真 3D 五子棋」(那是 gomoku3d 站的直向俯角補償把相機拉到 75~80°,記在 gomoku3d 交接與記憶),
+    接著問「平面版 chess5 是否也能加上 3D 與 2D 能切換,像 3D 象棋與西洋棋?」→ 拍板「請開工」。
+  查證(別再猜):有「3D/2D」下拉的是 **3D 象棋對局場**(incandescent-stroopwafel;`#viewSelect` 3D 視角/2D 視角)與 **3D 西洋棋 CO**
+    (3dchesscodex;3D 立體/2D 平面),都是 three.js 同一場景切相機(2D = 相機正上方、不給轉、只給左右轉、viewMode 記 localStorage 與存檔);
+    3d-xiangqi 與 3dchess-an **沒有**這顆(只有重置視角)。
+    本站早就有四顆 CSS 3D 預設(正視/斜視/俯瞰/第一人稱),但①藏在收合的「視角」面板、全螢幕工具列沒有
+    ②**手機媒體查詢把 3D 整個關掉**:0501 v8「改善手機版面、拿掉棋子陰影」那顆 commit(755eb46)寫死 `perspective:none` +
+      `transform-style:flat` + 盤側 `display:none` ⇒ 手機永遠平面,四顆預設按了只是把棋盤壓扁。這就是「手機看不到 3D」在本站的病根。
+  做:① index.html:左欄最上面 `.view-mode-row` —— `#viewModeBtn`(<b>現在是哪種</b><small>點一下換哪種</small>,不靠 title:Android 上 title 隱形)
+       + 「🧊 真 3D 版(WebGL)」連到 gomoku3d(那站已有「平面版五子棋」回連);全螢幕工具列加 `data-proxy="viewModeBtn"`「🧊 3D/2D」;
+       小技巧那行補「2D 平面不能轉」;verTag v30 白話 + v29 進前幾版。
+     ② style.css:手機媒體查詢裡那幾行壓平規則**搬出來**掛在 `body.view2d` 下(桌機/手機同一套:2D = 沒透視、盤側藏、cursor default);
+        手機媒體查詢只剩版面尺寸並留註解;`.view-mode-row / button.view-mode / .true3d-link` 樣式。
+     ③ script.js:`let viewMode="3d"` + `VIEW_HOME`/`VIEW_HOME_3D`(yaw 0 / pitch 38 / 手機 zoom 0.92)**宣告在第 2 節**
+        (首跑放 §22 ⇒ `Cannot access 'VIEW_HOME_3D' before initialization`:npm test 全綠、只有真瀏覽器炸,同 RESUMABLE_SIZES 那條 TDZ);
+        `viewMode` 進 gomoku.settings(load/save);§22 `viewHome()`、`applyViewMode()`(body.view2d/view3d、停用 yaw/pitch/自動旋轉、
+        鈕文字、aria-pressed、回該模式開場)、`setViewMode()`;四顆預設在 2D 按會先切回 3D;拖曳 pointerdown 在 2D 早退;
+        開機 `applyViewMode()` 取代裸 `applyRotation()`。
+     ④ 版號四處:sw v30 / tests/static v30 / verTag v30 / CLAUDE.md SW **v30**。static.test 加守六條(#viewModeBtn 在、代按鈕在、
+        壓平只准掛 body.view2d、手機媒體查詢不准 perspective:none 與 transform-style:flat(**先剝掉 CSS 註解再驗** —— 首跑被自己的
+        註解「以前寫死 perspective:none」算成紅燈)、2D 拖曳早退、viewMode 進設定)。
+     ⑤ scripts/check-reset-view.mjs(npm run check:reset)改驗「回到**目前模式**的開場」(3D 0/38/1.0)+ ②b 切換三件事
+        (2D 壓平不能轉 / 2D 按預設自動切回 3D / 重載後記得)+ 工具列 3D/2D 代按鈕真的切得動 ⇒ 14 項。
+     ⑥ 沒動:src 引擎六支(gomoku3d 的 engine-sync 逐字比對不會紅)、touch-lens、SW 名單。
+  驗:npm run verify 全綠(7 個 test 檔;vertag sw v30、前幾版 29 版不跳號);check:reset 本機 14/14、**線上 14/14**;
+     手機模擬(iPhone 13 直向):3D 開場 transform rotateX(38deg) scale(0.92)、棋盤投影 390 寬**沒溢出**(scrollWidth 390)、沉浸模式工具列
+     🧊 3D/2D 鈕可見且切得動;**真觸控在傾斜棋盤上點中央落子 ⇒ 落在 (7,7)**(本機與線上都試);桌機 3D/2D 截圖看過;零 pageerror。
+  部署:npm run deploy(verify → stage 16 檔 → wrangler pages deploy);線上 sw gomoku-pwa-v30、index 有 #viewModeBtn 與代按鈕、
+     style 有 body.view2d 規則、script 有 setViewMode、verTag「版本 v30(2026-09-20)」。
+  🟠 順手看到、刻意沒動:in-app-browser-guard hook 每次改 script.js 都吠「有安裝鈕(beforeinstallprompt)卻沒有 LINE WebView 偵測」——
+     那是本站早就存在的缺口,不在這輪範圍;要補走 skill in-app-browser-guard 的最小修法(開場提醒「用瀏覽器開啟」,只提醒不擋)。
+  ⏩ 下一件(未拍板):gomoku3d 那站直向俯角補償(58° → 75~80°)要不要收斂,候選修法記在記憶 gomoku3d-phone-looks-flat。
 
 ★★★★★ 2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷 —— SW v28 → v29 ★★★★★
   由來:3D-Chess 幻影版實機「裝成 App 打開就無法連上 / ERR_FAILED」。病根:Cloudflare Pages 把 /index.html 308 到 /,

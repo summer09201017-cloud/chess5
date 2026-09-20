@@ -1,7 +1,8 @@
 // 🔬 「🎥 重置視角」真瀏覽器驗收(2026-09-14 使用者拍板「五子棋補一顆重置視角」)。
 // 跑法:py -m http.server 8797(另一個視窗)→ node scripts/check-reset-view.mjs
 //      (或 CHECK_URL=線上網址 node scripts/check-reset-view.mjs)
-// 守:①鈕在左欄「視角」區看得到 ②用滑桿把 yaw/pitch/zoom 轉歪 ⇒ 按重置 ⇒ 三個值回到開場(0/0/1.0)、自動旋轉關掉
+// 守:①鈕在左欄「視角」區看得到 ②用滑桿把 yaw/pitch/zoom 轉歪 ⇒ 按重置 ⇒ 三個值回到**目前模式**的開場(3D 0/38/1.0、2D 0/0/1.0)、自動旋轉關掉
+//     ②b(0920)🧊 3D/2D 切換:2D 壓平不能轉、預設在 2D 按會自動切回 3D、模式重載後記得
 //     ③全螢幕工具列的「🎥 視角」代按鈕存在且代按得動(進沉浸模式後轉歪再按)④零 pageerror。
 // ★ 一律真點擊(page.click)、真拖滑桿(fill + dispatch input 等同使用者拖);不在 evaluate 裡呼叫 resetView。
 import { chromium } from "playwright-core";
@@ -60,10 +61,52 @@ console.log("\n── ② 轉歪 ⇒ 重置 ⇒ 回開場 ──");
   await page.click("#resetViewBtn");
   await page.waitForTimeout(400);   // 自動旋轉若沒關,這 400ms 會把 yaw 又轉走
   const after = await read();
-  ok(after.yaw === 0 && after.pitch === 0 && Math.abs(after.zoom - 1) < 1e-6,
-    "★★ 按重置後 yaw/pitch/zoom 回到開場 0 / 0 / 1.0", JSON.stringify(after));
+  /* 🧊 2026-09-20 起有 3D/2D 模式:開場角度是「目前模式」的 —— 3D 斜俯視 0/38/1.0、2D 正視 0/0/1.0(桌機視口,不套手機 zoom) */
+  const is3d = await page.evaluate(() => document.body.classList.contains("view3d"));
+  const homePitch = is3d ? 38 : 0;
+  ok(after.yaw === 0 && after.pitch === homePitch && Math.abs(after.zoom - 1) < 1e-6,
+    `★★ 按重置後 yaw/pitch/zoom 回到開場 0 / ${homePitch} / 1.0(${is3d ? "3D 斜俯視" : "2D 正視"})`, JSON.stringify(after));
   ok(after.spin === false, "★ 自動旋轉一起關掉(不然重置完又轉走)", String(after.spin));
-  ok(/rotateX\(0deg\) rotateY\(0deg\) scale\(1\)/.test(after.transform), "★ 棋盤真的畫回正視(transform 0/0/1)", after.transform);
+  ok(new RegExp(`rotateX\\(${homePitch}deg\\) rotateY\\(0deg\\) scale\\(1\\)`).test(after.transform), `★ 棋盤真的畫回開場(transform 0/${homePitch}/1)`, after.transform);
+}
+
+console.log("\n── ②b 🧊 3D/2D 切換:2D 壓平不能轉、切回 3D 回斜俯視、預設在 2D 按會自動切回 3D ──");
+{
+  await page.click("#viewModeBtn");   // 3D → 2D
+  await page.waitForTimeout(200);
+  const st2d = await page.evaluate(() => ({
+    cls: document.body.classList.contains("view2d"),
+    persp: getComputedStyle(document.getElementById("scene")).perspective,
+    yawDisabled: document.getElementById("yawRange").disabled,
+    label: document.getElementById("viewModeLabel").textContent,
+    transform: document.getElementById("board3d").style.transform,
+  }));
+  ok(st2d.cls && st2d.persp === "none" && st2d.yawDisabled && /2D/.test(st2d.label) && /rotateX\(0deg\)/.test(st2d.transform),
+    "★ 切到 2D:body.view2d / 沒透視 / 滑桿停用 / 鈕寫 2D / 正視", JSON.stringify(st2d));
+  await page.click('.preset[data-preset="slant"]');   // 2D 按預設 ⇒ 自動切回 3D
+  await page.waitForTimeout(200);
+  const st3d = await page.evaluate(() => ({
+    cls: document.body.classList.contains("view3d"),
+    persp: getComputedStyle(document.getElementById("scene")).perspective,
+    label: document.getElementById("viewModeLabel").textContent,
+    transform: document.getElementById("board3d").style.transform,
+  }));
+  ok(st3d.cls && st3d.persp !== "none" && /3D/.test(st3d.label) && /rotateX\(38deg\) rotateY\(24deg\)/.test(st3d.transform),
+    "★ 2D 按「斜視」預設 ⇒ 自動切回 3D 並套上該預設(38/24)", JSON.stringify(st3d));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#viewModeBtn", { state: "attached", timeout: 20000 });
+  await page.waitForTimeout(400);
+  const persisted = await page.evaluate(() => document.body.classList.contains("view3d"));
+  ok(persisted, "★ 模式記在 gomoku.settings,重載後還是 3D");
+  await page.click("#viewModeBtn"); await page.waitForTimeout(150);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#viewModeBtn", { state: "attached", timeout: 20000 });
+  await page.waitForTimeout(400);
+  const persisted2d = await page.evaluate(() => document.body.classList.contains("view2d"));
+  ok(persisted2d, "★ 切成 2D 重載後還是 2D");
+  await page.click("#viewModeBtn"); await page.waitForTimeout(150);   // 回 3D,給 ③ 用
+  const det = page.locator("details:has(#resetViewBtn)");
+  if (!(await det.evaluate((d) => d.open))) await det.locator("summary").click();
 }
 
 console.log("\n── ③ 全螢幕工具列的「🎥 視角」代按鈕 ──");
@@ -77,7 +120,14 @@ console.log("\n── ③ 全螢幕工具列的「🎥 視角」代按鈕 ──
   await proxy.evaluate((b) => b.click());
   await page.waitForTimeout(200);
   const r = await read();
-  ok(r.yaw === 0 && r.pitch === 0, "★ 代按鈕按下去也回得到開場", JSON.stringify(r));
+  ok(r.yaw === 0 && r.pitch === 38, "★ 代按鈕按下去也回得到開場(3D 斜俯視 0/38)", JSON.stringify(r));
+  const proxyMode = page.locator('#immersiveHud button[data-proxy="viewModeBtn"]');
+  ok(await proxyMode.count() === 1, "★ 工具列裡有 🧊 3D/2D 代按鈕", String(await proxyMode.count()));
+  await proxyMode.evaluate((b) => b.click());
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => document.body.classList.contains("view2d")), "★ 3D/2D 代按鈕按下去真的切到 2D");
+  await proxyMode.evaluate((b) => b.click());
+  await page.waitForTimeout(200);
 }
 ok(errors.length === 0, "整段零 pageerror", errors.join(" | "));
 

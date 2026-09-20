@@ -19,7 +19,7 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v29/);
+assert.match(serviceWorker, /gomoku-pwa-v30/);
 // 0914 全艦隊:CF 把 /index.html 308 到 / ⇒ 名單/退路有 index.html 就會快取到 redirected 回應 ⇒ 裝成 App 開就 ERR_FAILED(3D-Chess 實錘)
 assert.doesNotMatch(serviceWorker.replace(/^\s*\/\/.*$/gm, ""), /["'](\.\/|\/)?index\.html["']/, "service-worker.js 的名單 / 退路不得出現 index.html(只准 ./)");
 assert.match(serviceWorker, /caches\.match\("\.\/"\)/, "離線導覽退路要退 ./");
@@ -168,5 +168,21 @@ assert.match(script, /if \(n && \(hud\.contains\(n\) \|\| out === n \|\| out\.co
 
 assert.match(script, /function immersiveHud\(\)/,
   "浮動工具列的接線要住在 script.js(本站鐵則:index.html 不放內嵌 JS)");
+
+/* ══ 🧊 3D 立體 / 2D 平面 一鍵切換(2026-09-20 使用者:「平面版也能像 3D 象棋與西洋棋那樣切換嗎」)══
+   守三件事:①鈕 + 全螢幕代按鈕在 ②壓平的 CSS 只准掛在 body.view2d 下 —— 手機媒體查詢裡不准再**無條件**關透視
+   (0501 v8 那幾行就是「手機永遠看不到 3D」的病根,四顆預設按了只是把棋盤壓扁)③2D 時拖曳旋轉要早退、模式要記進設定。 */
+assert.match(index, /id="viewModeBtn"/, "index.html 缺 #viewModeBtn(3D/2D 切換鈕)");
+assert.match(index, /data-proxy="viewModeBtn"/, "全螢幕工具列缺 3D/2D 的代按鈕");
+assert.match(style, /body\.view2d \.scene \{ perspective: none; \}/, "2D 的壓平規則要掛在 body.view2d 下");
+// 註解不是程式碼:區塊裡的說明文字寫著「以前寫死 perspective:none」,先剝掉註解再驗(首跑就被自己的註解算成紅燈)
+const mobileBlock = ((style.match(/@media \(max-width: 980px\) \{([\s\S]*?)\n\}/) || [])[1] || "").replace(/\/\*[\s\S]*?\*\//g, "");
+assert.ok(mobileBlock.length > 200, "找不到手機媒體查詢區塊");
+assert.doesNotMatch(mobileBlock, /perspective:\s*none/, "手機媒體查詢不准無條件關透視(0501 v8 那行就是手機永遠平面的病根)");
+assert.doesNotMatch(mobileBlock, /transform-style:\s*flat/, "手機媒體查詢不准無條件壓平");
+assert.match(script, /function setViewMode\(/);
+assert.match(script, /function applyViewMode\(/);
+assert.match(script, /viewMode,\s*\n\s*\};/, "viewMode 要進 gomoku.settings(換模式要記住)");
+assert.match(script, /if \(viewMode === "2d"\) return;/, "2D 時拖曳旋轉要早退");
 
 console.log("static tests passed");

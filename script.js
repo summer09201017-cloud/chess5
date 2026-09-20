@@ -124,6 +124,16 @@ let weatherStarted = false;
 
 const rotation = { yaw: 0, pitch: 0, zoom: 1.0, autoSpin: false };
 const dragState = { active:false, pointerId:null, startX:0, startY:0, startYaw:0, startPitch:0 };
+/* 🧊 3D 立體 / 2D 平面(2026-09-20 使用者:「平面版也能像 3D 象棋與西洋棋那樣 3D 與 2D 切換嗎」)。
+   照 3D 象棋對局場的做法:一個開關、記進 gomoku.settings;2D = body.view2d(沒透視、不能轉,CSS 在 style.css)。
+   ★ 手機版以前是**永遠**平面(0501 v8 手機媒體查詢把 perspective 關掉)—— 使用者「手機看不到 3D」在本站的病根。 */
+let viewMode = "3d";
+/* ⚠ 兩個開場角度放這裡不放 §22:開機第 4 節就 applyViewMode() → resetView() 讀它們,const 不像 function 會提升,
+   放 §22 就是 TDZ ReferenceError(npm test 全綠、只有真瀏覽器炸 —— 0920 首跑就踩到,同 RESUMABLE_SIZES 那條)。 */
+const VIEW_HOME = { yaw: 0, pitch: 0, zoom: 1.0 };          // 2D 平面的開場 = 正視
+/* 3D 立體的開場 = 斜俯視(跟 gomoku3d 那站 58° 的相機差不多;yaw 0 才好落子)。
+   手機 zoom 收到 0.92(見 viewHome):棋盤傾斜後下緣往鏡頭靠會被透視放大,1.0 在 390 寬會左右各切掉十幾 px。 */
+const VIEW_HOME_3D = { yaw: 0, pitch: 38, zoom: 1.0 };
 
 /* ---------- 3. DOM refs ---------- */
 const $ = (id) => document.getElementById(id);
@@ -167,7 +177,7 @@ populateAchievements();
 buildGrid();
 buildIntersections();
 refreshZoomLimit();
-applyRotation();
+applyViewMode();   // 🧊 套用 3D/2D(body class、鈕文字、該模式的開場角度;裡面會 applyRotation())
 attachEvents();
 startAutoRotateLoop();
 startWeatherLoop();
@@ -1242,6 +1252,7 @@ function loadPersistedSettings() {
     if (raw.humanColor) humanColor = raw.humanColor;
     if (typeof raw.forbidden === "boolean") forbiddenOn = raw.forbidden;
     if (raw.timer != null) perMoveSeconds = raw.timer;
+    if (raw.viewMode === "2d" || raw.viewMode === "3d") viewMode = raw.viewMode;   // 🧊 3D/2D(套用在開機的 applyViewMode)
   } catch {}
   CELL_RATIO = (1 - MARGIN_RATIO * 2) / (BOARD_SIZE - 1);
   HOTSPOT_RATIO = CELL_RATIO * 1.0;
@@ -1272,6 +1283,7 @@ function saveSettings() {
     humanColor,
     forbidden: forbiddenOn,
     timer: perMoveSeconds,
+    viewMode,
   };
   try { localStorage.setItem("gomoku.settings", JSON.stringify(data)); } catch {}
 }
@@ -2019,15 +2031,43 @@ function startAutoRotateLoop() {
    和四顆預設的差別:預設是「換一個角度」,這顆是「回到開場」—— 開場就是 rotation 的初值(正視 0/0、zoom 1.0),
    所以直接回初值,不另外抄一份數字(抄第二份的那天兩邊就會漂)。自動旋轉也關掉:重置完還在轉等於沒重置。
    全螢幕工具列的「🎥 視角」是代按這顆(data-proxy),不自己實作第二份。 */
-const VIEW_HOME = { yaw: 0, pitch: 0, zoom: 1.0 };
+/* VIEW_HOME / VIEW_HOME_3D 宣告在第 2 節(開機就用到,放這裡會 TDZ) */
+function viewHome() {
+  if (viewMode !== "3d") return VIEW_HOME;
+  const mobile = window.matchMedia("(max-width: 980px)").matches;
+  return mobile ? { ...VIEW_HOME_3D, zoom: 0.92 } : VIEW_HOME_3D;
+}
 function resetView() {
   rotation.autoSpin = false;
   if (autoSpinInput) autoSpinInput.checked = false;
-  Object.assign(rotation, VIEW_HOME);
+  Object.assign(rotation, viewHome());
   syncControls();
   applyRotation();
 }
+/* 🧊 3D 立體 / 2D 平面 —— 一顆鈕來回切(#viewModeBtn;全螢幕工具列的「🧊 3D/2D」代按它)。
+   2D:body.view2d(CSS 拿掉透視與盤身側面)、yaw/pitch/自動旋轉停用、拖曳旋轉不理;
+   四顆視角預設在 2D 按了會自動切回 3D(預設本來就是「換一個角度」)。
+   換模式一律回該模式的開場角度:免得 2D 帶著 3D 的斜角被壓成扁的、或 3D 開場還是正視看不出立體。 */
+function applyViewMode() {
+  const is3d = viewMode === "3d";
+  document.body.classList.toggle("view2d", !is3d);
+  document.body.classList.toggle("view3d", is3d);
+  for (const el of [yawRange, pitchRange, autoSpinInput]) if (el) el.disabled = !is3d;
+  const btn = $("viewModeBtn");
+  if (btn) btn.setAttribute("aria-pressed", String(is3d));
+  const lab = $("viewModeLabel");
+  if (lab) lab.textContent = is3d ? "🧊 3D 立體" : "▦ 2D 平面";
+  const hint = $("viewModeHint");
+  if (hint) hint.textContent = is3d ? "點一下換 2D 平面" : "點一下換 3D 立體";
+  resetView();
+}
+function setViewMode(next) {
+  viewMode = next === "2d" ? "2d" : "3d";
+  applyViewMode();
+  saveSettings();
+}
 function applyViewPreset(name) {
+  if (viewMode !== "3d") setViewMode("3d");   // 預設是 3D 的角度:在 2D 按就先切回 3D
   const p = {
     flat:  { yaw: 0,   pitch: 0,   zoom: 1.0 },
     slant: { yaw: 24,  pitch: 38,  zoom: 1.05 },
@@ -2243,6 +2283,8 @@ function attachEvents() {
   });
   const resetViewBtn = $("resetViewBtn");
   if (resetViewBtn) resetViewBtn.addEventListener("click", resetView);
+  const viewModeBtn = $("viewModeBtn");   // 🧊 3D/2D 來回切
+  if (viewModeBtn) viewModeBtn.addEventListener("click", () => setViewMode(viewMode === "3d" ? "2d" : "3d"));
 
   // 外觀
   themeSelect.addEventListener("change", () => {
@@ -2328,6 +2370,7 @@ function attachEvents() {
   // 拖曳旋轉（延後觸發：要移動 5px 以上才視為拖曳）
   scene.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
+    if (viewMode === "2d") return;   // 🧊 2D 平面不能轉(沒透視的板子被 rotateX 只會壓成扁的;和 3D 象棋對局場一樣兩套控制不打架)
     if (e.target.closest(".intersection")) return;
     dragState.active = false; // 還未確定要拖
     dragState.pending = true;

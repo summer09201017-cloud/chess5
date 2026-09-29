@@ -4,7 +4,8 @@ import { createTouchLens, paintBoardNeighborhood } from "./touch-lens.js";   // 
 import { PUZZLES, PUZZLE_TIERS } from "./puzzles.js";
 import { solve as puzzleSolve, bestDefence as puzzleBestDefence } from "./puzzle-solver.js";
 import { pickDailySet, dailyKey, shiftKey, DAILY_KEEP_DAYS } from "./daily-picker.js";
-import { pickAiLine, situationFromShape } from "./commentary.js";   // 🤖 電腦口白(純函式,句庫與挑句規則在那支;本檔只管什麼時候講)
+import { pickAiLine, situationFromShape } from "./commentary.js";
+import { tossForOrder, topFace } from "./dice-toss.js";   // 🎲 擲骰 / 🪙 擲硬幣決定先後(v31;正本在 skills repo dice-coin-toss/assets,站內不改)   // 🤖 電腦口白(純函式,句庫與挑句規則在那支;本檔只管什麼時候講)
 
 /* ============================================================
  * 3D 五子棋 — 全功能版
@@ -85,7 +86,10 @@ let aiTimer = null;
 let aiGen = 0;                 // 🧵 電腦這一手的世代:Worker 回來時世代不同(重開/換模式後)一律丟掉
 let hintBusy = false;          // 🧵 提示在 Worker 算的期間,再按不重算
 let mode = "pve";              // pve | pvp | online | puzzle | daily
-let humanColor = "black";
+let humanColor = "black";   // 這一局你實際執的顏色(永遠是 black / white)
+let colorChoice = "black";  // 選單值:black / white / random / dice / coin —— 每局開局才解成 humanColor(v31 起分開,以前 random 解一次就被蓋掉)
+let tossTok = 0;            // 🎲 擲骰局號:新局 / 換模式就 +1,舊的擲骰結果回來一律作廢
+let tossing = false;        // 擲骰浮層開著 ⇒ 棋盤不收點、電腦不開想
 let forbiddenOn = false;
 let perMoveSeconds = 0;
 let timerInterval = null;
@@ -188,7 +192,7 @@ maybeLoadFromUrl();
 if (moveHistory.length === 0) updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
 bootstrapPuzzleMode();   // ?puzzle=<id> 深連結,或上次就是解謎模式 → 直接載題(否則會是空盤配「黑棋先手」)
 offerResume();           // 有可接續的棋局才會亮出那顆鈕;放最後,分享連結/解謎深連結都處理完才問
-if (mode === "pve" && humanColor === "white") startAiTurn();
+if (mode === "pve" && moveHistory.length === 0 && !isPuzzleMode()) beginPveGame();   // 🎲 開頁也算一局:選了擲骰就先擲
 
 /* ---------- 5. 棋盤建構 ---------- */
 function setBoardSize(n) {
@@ -316,7 +320,7 @@ function onPointClick(event) {
   if (mode === "pvp") return playMoveLocal(row, col, currentPlayer);
 
   // pve
-  if (humanColor === "random") humanColor = currentPlayer; // 保險：若殘留 "random" 立即解析
+  if (tossing) return;   // 🎲 還在擲骰決定誰先
   if (currentPlayer !== humanColor) return;
   if (!playMoveLocal(row, col, humanColor)) return;
   if (gameOver) return;
@@ -497,9 +501,10 @@ function undoMove() {
     return;
   }
   if (moveHistory.length === 0 || aiThinking || paused) return;
-  // 在 PvE 一次回兩步（玩家+AI），其他模式回一步
-  const steps = (mode === "pve" && moveHistory.length >= 2) ? 2 : 1;
-  for (let i = 0; i < steps; i++) {
+  // PvE:退到「剛好退掉你那一手」為止(v31)—— 以前固定退兩步,你執白時悔到開局會變成
+  // 空盤卻輪到白棋、電腦也不會重下;你贏棋那手之後悔棋則會讓黑棋連下兩手。其他模式回一步。
+  if (mode === "pve" && !moveHistory.some((m) => m.color === humanColor)) return;   // 你還沒下過(執白、只有電腦第一手)⇒ 沒東西可悔
+  for (let i = 0; i < moveHistory.length + 1; i++) {
     const last = moveHistory.pop();
     if (!last) break;
     redoStack.push(last);
@@ -508,6 +513,7 @@ function undoMove() {
     p.classList.remove("occupied", "last-move", "winning");
     p.replaceChildren();
     p.setAttribute("aria-label", `第 ${last.row+1} 列 第 ${last.col+1} 行 空位`);
+    if (mode !== "pve" || last.color === humanColor) break;
   }
   gameOver = false;
   winningCells = [];
@@ -630,6 +636,7 @@ function engineMoveAsync(fn, color, opts) {
 function startAiTurn() {
   if (gameOver || mode !== "pve") return;
   if (currentPlayer === humanColor) return;
+  if (tossing) return;  // 🎲 擲骰還沒決定誰先
   if (paused) return;   // ⏸ 暫停中不開始想(繼續時 setPaused 會再叫一次)
   const config = AI_LEVELS[aiLevelInput.value] || AI_LEVELS.normal;
   setAiThinking(true);
@@ -1076,6 +1083,35 @@ function touchesOpponentLine(row, col, color) {
 }
 
 /* ---------- 12. 重新開始 ---------- */
+/* 🎲 PvE 開局:把選單值解成這一局的 humanColor。擲骰 / 擲硬幣 ⇒ 開浮層,先的人執黑(黑先);
+   每局重擲;期間 tossing=true 擋棋盤與電腦;局號對不上(中途換局 / 換模式)的結果作廢。 */
+function beginPveGame() {
+  const tok = ++tossTok;
+  const go = (color) => {
+    if (tok !== tossTok || mode !== "pve" || moveHistory.length) return;
+    tossing = false;
+    humanColor = color;
+    updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
+    saveSettings();
+    if (humanColor === "white") setTimeout(startAiTurn, 200);
+  };
+  if (colorChoice === "dice" || colorChoice === "coin") {
+    tossing = true;
+    updateStatus(colorChoice === "dice" ? "🎲 擲骰決定誰先…" : "🪙 擲硬幣決定誰先…");
+    const foe = `電腦（${(AI_LEVELS[aiLevelInput.value] || AI_LEVELS.normal).label}）`;
+    tossForOrder({
+      players: ["你", foe],
+      mode: colorChoice,
+      onEvent: (e) => { if (e === "roll") playTick(); else if (e === "land") playClick(); },
+      firstText: (name) => `${name} 先!執 ⚫ 黑棋`,
+    }).then((r) => go(r.first === 0 ? "black" : "white"))
+      .catch((e) => { console.warn("[dice]", e); go("black"); });   // 浮層出事也不能卡住:照規則你執黑先下
+    return;
+  }
+  go(colorChoice === "white" ? "white" : colorChoice === "random" ? (Math.random() < 0.5 ? "black" : "white") : "black");
+}
+window.__dice = { topFace, get colorChoice() { return colorChoice; }, get humanColor() { return humanColor; }, get tossing() { return tossing; } };   // 🧪 冒煙測試掛勾
+
 function resetGame(opts = {}) {
   window.__matchT0 = Date.now();   // 📊 給 finalizeGame 的 -done 算「本局秒數」用
   clearPause();                    // ⏸ 新局一定從「沒暫停」開始(暫停中按重新開始也要能開得起來)
@@ -1099,10 +1135,10 @@ function resetGame(opts = {}) {
     }
   }
   currentPlayer = "black";
+  tossTok++; tossing = false;   // 🎲 上一局還沒擲完的結果作廢
   if (mode === "pve") {
-    if (humanColor === "random") humanColor = Math.random() < 0.5 ? "black" : "white";
-    updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);
-    if (humanColor === "white" && !replaying) setTimeout(startAiTurn, 200);   // 重播:空盤上先讓 AI 下一手會毀掉要重播的棋譜
+    if (replaying) updateStatus(`黑棋先手（${humanColor === "black" ? "你" : "電腦"}）`);   // 重播:照棋譜原本的執色,不擲、電腦也不先下(會毀掉要重播的棋譜)
+    else beginPveGame();
   } else if (mode === "pvp") {
     updateStatus("黑棋先手（玩家 1）");
   } else if (mode === "online") {
@@ -1249,7 +1285,9 @@ function loadPersistedSettings() {
     if (typeof raw.aiVoice === "boolean") aiVoiceOn = raw.aiVoice;
     if (raw.aiLevel) aiLevelInput.value = raw.aiLevel;
     if (raw.mode) mode = raw.mode;
-    if (raw.humanColor) humanColor = raw.humanColor;
+    if (raw.humanColor === "black" || raw.humanColor === "white") humanColor = raw.humanColor;
+    colorChoice = ["black", "white", "random", "dice", "coin"].includes(raw.colorChoice) ? raw.colorChoice
+      : raw.humanColor === "random" ? "random" : humanColor;   // 舊存檔沒有 colorChoice ⇒ 沿用當時的執色
     if (typeof raw.forbidden === "boolean") forbiddenOn = raw.forbidden;
     if (raw.timer != null) perMoveSeconds = raw.timer;
     if (raw.viewMode === "2d" || raw.viewMode === "3d") viewMode = raw.viewMode;   // 🧊 3D/2D(套用在開機的 applyViewMode)
@@ -1268,7 +1306,7 @@ function loadPersistedSettings() {
   if (soundToggle) soundToggle.checked = soundOn;
   if (aiVoiceToggle) aiVoiceToggle.checked = aiVoiceOn;
   document.body.dataset.mode = mode;
-  document.querySelectorAll('input[name="playerColor"]').forEach(r => r.checked = (r.value === humanColor));
+  document.querySelectorAll('input[name="playerColor"]').forEach(r => r.checked = (r.value === colorChoice));
 }
 function saveSettings() {
   const data = {
@@ -1281,6 +1319,7 @@ function saveSettings() {
     aiLevel: aiLevelInput.value,
     mode,
     humanColor,
+    colorChoice,
     forbidden: forbiddenOn,
     timer: perMoveSeconds,
     viewMode,
@@ -1377,7 +1416,10 @@ function resumeSession() {
   if (s.mode === "pve" && (s.humanColor === "black" || s.humanColor === "white")) {
     humanColor = s.humanColor;
     // 先手顏色是 radio 不是 select(同 loadPersistedSettings 的寫法)
-    document.querySelectorAll('input[name="playerColor"]').forEach(r => { r.checked = (r.value === humanColor); });
+    if (colorChoice === "black" || colorChoice === "white") {   // 固定執色的人:選單跟著接續那盤;選了隨機 / 擲骰就不動他的選擇
+      colorChoice = humanColor;
+      document.querySelectorAll('input[name="playerColor"]').forEach(r => { r.checked = (r.value === colorChoice); });
+    }
   }
   replaySilently(() => {
     resetGame();
@@ -2237,7 +2279,7 @@ function attachEvents() {
 
   document.querySelectorAll('input[name="playerColor"]').forEach(r => {
     r.addEventListener("change", () => {
-      humanColor = r.value;
+      colorChoice = r.value;
       saveSettings();
       if (mode === "pve") resetGame();
     });

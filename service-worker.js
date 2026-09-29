@@ -2,7 +2,7 @@
 //    Cloudflare Pages 把 /index.html 308 轉到 / ⇒ 名單裡有 "./index.html" 的話 install 存到的是 redirected:true 的回應,
 //    導覽拿到它瀏覽器直接拒收 ⇒ 裝成 App 開就 ERR_FAILED;每次 bump SW 重踩。⇒ 名單與離線退路只認 "./",永遠不要再把 index.html 加回來。
 //    同時 addAll(全部或全無)改成逐一 add + catch:一個檔抓不到不再整批沒快取。
-const CACHE_NAME = "gomoku-pwa-v30";
+const CACHE_NAME = "gomoku-pwa-v31";
 const CORE_ASSETS = [
   "./",
   "./style.css",
@@ -14,7 +14,8 @@ const CORE_ASSETS = [
   "./puzzle-solver.js",
   "./puzzles.js",
   "./daily-picker.js",
-  "./commentary.js",   // 🤖 電腦口白句庫:script.js 的 import ⇒ 不進快取,離線開整支 script 會載入失敗
+  "./commentary.js",
+  "./dice-toss.js",    // 🎲 擲骰浮層:script.js 的 import ⇒ 不進快取,離線開整支 script 載不起來   // 🤖 電腦口白句庫:script.js 的 import ⇒ 不進快取,離線開整支 script 會載入失敗
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.png",

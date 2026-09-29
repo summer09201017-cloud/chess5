@@ -1,8 +1,12 @@
 # roadmap — 3D 五子棋(chess5)
 
-更新:2026-09-20
+更新:2026-09-30
 
 ## ✅ 已完成(別重做)
+
+- **0930 🎲 擲骰 / 擲硬幣決定先後**(skill dice-coin-toss,大表骰5;SW v31,`f09e2c1`):
+  「玩家先後手」多 🎲 / 🪙,擲贏的執黑先下、每局重擲、兩人同機不擲;colorChoice 與 humanColor 分開;
+  順手修悔棋兩洞(執白悔到開局、贏棋後悔棋)。dice-toss.js 是 skill 正本,站內不改。
 
 - **0920 🧊 3D 立體 / 2D 平面 一鍵切換**(照 3D 象棋對局場 / 西洋棋 CO 的「視角模式」;SW v30):
   `#viewModeBtn` + 全螢幕代按鈕,記進 gomoku.settings;2D = body.view2d 沒透視不能轉;3D 開場斜俯視 38°。

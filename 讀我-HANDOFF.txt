@@ -1,7 +1,25 @@
 ================================================================================
-3D 五子棋(chess5)— 交接說明          最後更新:2026-09-20(agape250 機・Fable 5.1:🧊 3D 立體 / 2D 平面 一鍵切換;SW v30)
-                                     前一版:2026-09-14(HFP 機:🩹 拔掉 index.html 進 SW 快取地雷;SW v29)・2026-09-14(HFP 機:🎥 重置視角;SW v28)・2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
+3D 五子棋(chess5)— 交接說明          最後更新:2026-09-30(HFP 機(hostname DEYI)・Opus 5.5:🎲 擲骰 / 擲硬幣決定先後;SW v31)
+                                     前一版:2026-09-20(agape250 機・Fable 5.1:🧊 3D 立體 / 2D 平面 一鍵切換;SW v30)・2026-09-14(HFP 機:🩹 拔掉 index.html 進 SW 快取地雷;SW v29)・2026-09-14(HFP 機:🎥 重置視角;SW v28)・2026-09-10(agape250 機・Sonnet 5:🗂 全螢幕工具列可收起;SW v27)
 ================================================================================
+
+★★★★★ 2026-09-30(HFP 機(hostname DEYI)・Opus 5.5・session_014kJynPTaeG46ZUcFsQbheJ 做、0930-chess5擲骰-家裡 場補交接)🎲 擲骰 / 擲硬幣決定先後 —— SW v30 → v31 ★★★★★
+  由來:大表「擲骰佇列」骰5(skill dice-coin-toss)。開工前 grep:選單本來就有 我下黑棋 / 我下白棋 / 隨機,執白時電腦先下天元 ⇒ S 級。
+  做了什麼(commit f09e2c1,2026-09-30 02:01):
+    ① 「玩家先後手」多 🎲 擲骰決定 / 🪙 擲硬幣:擲贏的人執黑先下;每局(含開頁、重新開始)重擲;兩人同機不擲。
+       dice-toss.js 由 skill 正本 cp,**站內不改**;進 SW CORE_ASSETS 與 stage SITE_FILES。
+    ② colorChoice(選單值)與 humanColor(這局實際執色)分開:以前「隨機」解一次就被蓋掉,現在每局重抽;
+       舊存檔沒有 colorChoice ⇒ 沿用當時執色。beginPveGame():擲骰期間 tossing 擋棋盤與電腦,tossTok 讓舊結果作廢。
+    ③ 悔棋(PvE)改成退到「剛好退掉你那一手」:修掉兩個洞(執白悔到開局 ⇒ 空盤輪到白、電腦不重下;贏棋後悔棋 ⇒ 黑連下兩手)。
+  驗:tests/dice.test.mjs 5 項(進 npm test)+ scripts/smoke-dice.mjs 真瀏覽器 20/0;突變:拿掉悔棋守門 2 紅、拿掉 tossing 擋點 4 紅;
+     回歸 smoke-ai 12/0、smoke-resume / smoke-puzzles 全過、check-reset-view 14/0。
+  線上:0930 收尾場實查 https://5-chess.pages.dev/service-worker.js = gomoku-pwa-v31、/dice-toss.js 200。
+  ⚠ 坑:① 這台 clone 開工前沒 pull,本機先寫成 v30,push 被拒才發現遠端已有 8f9cf18(0920 也是 v30)⇒ rebase 後改 v31。**開工前先 git pull。**
+       ② GitHub Actions 綠燈但沒設 CF secrets、跳過部署 ⇒ 要手跑 npm run deploy(CLAUDE.md 部署段早有寫)。
+       ③ 本機 ms-playwright 版本對不上借來的 playwright ⇒ 冒煙走系統 Edge(channel: "msedge")。
+  規格:Antigravity 產的 hfpc-claude-skills/references/04-五子棋2D擲骰-dev-spec.md 是 **02:06 寫的,比實作晚 5 分鐘**
+     (等於對已完成的東西補寫規格);輪值帳本照記一筆 antigravity ⇒ 下一份輪到 Codex。
+  ⏩ 下一件(大表):骰7 撞球 billiards3d(🪙 誰開球)—— 不在本 repo。
 
 ★★★★★ 2026-09-20(agape250 機・Fable 5.1・0920-gomoku3d-手機看不到真3D-喬治 場)🧊 3D 立體 / 2D 平面 一鍵切換 —— SW v29 → v30 ★★★★★
   由來:使用者早上先問「手機上為何看不到真 3D 五子棋」(那是 gomoku3d 站的直向俯角補償把相機拉到 75~80°,記在 gomoku3d 交接與記憶),

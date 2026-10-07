@@ -30,6 +30,8 @@ const SITE_FILES = [
   "puzzles.js",
   "daily-picker.js",
   "commentary.js",
+  "js",                    // 🐾 動物對手(v32):opponent / animals / voice / three-shim / voicePhrases
+  "voice",                 // 🐾 36 句預烤人聲 mp3(與 gomoku3d 同一份)+ manifest.json
   "dice-toss.js",          // 🎲 擲骰浮層(v31):script.js 的 import,沒帶上去整支 script 載不起來          // 🤖 電腦口白句庫(v25):script.js 的 import ⇒ 沒帶上去線上整支 script 載不起來
   "manifest.webmanifest",
   "service-worker.js",

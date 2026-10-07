@@ -19,7 +19,7 @@ assert.match(index, /<title>3D 五子棋<\/title>/);
 assert.match(index, /<script type="module" src="script\.js"><\/script>/);
 assert.equal(manifest.name, "3D 五子棋");
 assert.match(serviceWorker, /game-rules\.js/);
-assert.match(serviceWorker, /gomoku-pwa-v31/);
+assert.match(serviceWorker, /gomoku-pwa-v32/);
 assert.match(serviceWorker, /"\.\/dice-toss\.js"/, "🎲 dice-toss.js 是 script.js 的 import ⇒ 必須進 SW 快取");
 // 0914 全艦隊:CF 把 /index.html 308 到 / ⇒ 名單/退路有 index.html 就會快取到 redirected 回應 ⇒ 裝成 App 開就 ERR_FAILED(3D-Chess 實錘)
 assert.doesNotMatch(serviceWorker.replace(/^\s*\/\/.*$/gm, ""), /["'](\.\/|\/)?index\.html["']/, "service-worker.js 的名單 / 退路不得出現 index.html(只准 ./)");

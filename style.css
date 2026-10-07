@@ -893,3 +893,17 @@ body.immersive #immersiveStatus {
   .pause-veil{animation:pauseIn .18s ease-out}
   @keyframes pauseIn{from{opacity:0}}
 }
+
+/* ══════════ 🐾 動物對手(2026-10-07,skill animal-opponent-kit 第八節)══════════
+   CSS 棋盤沒有 three 場景 ⇒ 牠住在透明 WebGL 小窗 #petCanvas(#scene 裡),疊在棋盤遠端正上方;
+   位置 / 大小由 js/opponent.js 量棋盤投影框後設 inline style。#board3d 疊在牠上面 ⇒ 下半身被桌子遮住 = 坐在桌後。 */
+#board3d { z-index: 1; }
+.pet-canvas { position: absolute; z-index: 0; pointer-events: none; display: block; }
+.pet-canvas[hidden] { display: none; }
+/* 牠坐著時棋盤往下讓一點位子(舞台高度固定、棋盤置中,上面本來只剩幾十 px) */
+body.pet-on .scene { padding-top: clamp(70px, 13vmin, 120px); box-sizing: border-box; }
+body.pet-on .board-3d { width: clamp(300px, 66vmin, 640px); }
+.pet-field .pet-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.pet-field .pet-opt { flex: 1 1 0; min-height: 44px; padding: 6px 8px; border-radius: 12px; font: inherit; font-size: 0.9rem; cursor: pointer; }
+.pet-field .pet-opt[aria-pressed="false"] { background: rgba(0, 0, 0, 0.06); color: var(--text); border: 1px solid var(--panel-border); font-weight: 400; }   /* 沒選的 = ghost 樣;選中的留本站主色鈕 */
+.pet-field .pet-opt[aria-pressed="true"] { font-weight: 700; }

@@ -82,6 +82,7 @@ let pendingSession = null;     // 開機時讀到的可接續棋局(還沒套用
 let currentPlayer = "black";
 let gameOver = false;
 let aiThinking = false;
+let pet = null;                // 🐾 動物對手(initPet 在檔尾 dynamic import;沒載到就一直是 null)
 let aiTimer = null;
 let aiGen = 0;                 // 🧵 電腦這一手的世代:Worker 回來時世代不同(重開/換模式後)一律丟掉
 let hintBusy = false;          // 🧵 提示在 Worker 算的期間,再按不重算
@@ -369,8 +370,10 @@ function commitMove(row, col, color) {
     const toldShape = showCommentary(row, col, color);   // 重播:不放 N 次落子聲、不跳 N 次旁白
     if (!toldShape && mode === "pve" && color !== humanColor) sayAiMoveLine(row, col, color);
   }
+  const win0 = checkWinFull(row, col, color);   // 🐾 先算一次,只為了讓「哇」不要在成五那一手搶勝負台詞
+  if (!replaying && !win0) petAfterMove(color);
 
-  const win = checkWinFull(row, col, color);
+  const win = win0;
   if (win) {
     gameOver = true;
     winningCells = win;
@@ -428,6 +431,7 @@ function finalizeGame(winnerColor) {
   // ★★ 重播到「已下完」的棋譜時,這一盤不是使用者下的 ⇒ 一律不計分、不存檔。
   //    修掉一個現在就存在的 bug:分享連結與匯入棋譜載入已分勝負的棋譜,本機雙人的勝場數會直接加一。
   if (replaying) return;
+  if (mode === "pve") petGameOver(!winnerColor ? "draw" : winnerColor === humanColor ? "youWin" : "petWin");   // 🐾
   // 📊 play-stats -done:玩完一局(t=本局秒數,從 resetGame 起算)。重播的棋不算(上一行已 return)。統計是配菜,失敗靜默。
   try {
     if (!["localhost", "127.0.0.1"].includes(location.hostname)) {
@@ -517,6 +521,7 @@ function undoMove() {
   }
   gameOver = false;
   winningCells = [];
+  if (pet) { pet.cancel(); pet.endedFor = null; }   // 🐾 悔棋:收掉托腮 / 勝負姿勢
   // recompute current player from history
   if (mode === "pvp") {
     currentPlayer = moveHistory.length % 2 === 0 ? "black" : "white";
@@ -642,6 +647,7 @@ function startAiTurn() {
   setAiThinking(true);
   aiTurnNo++;
   if (aiTurnNo % 3 === 1) sayAiLine("think");   // 每三手講一次「我想想」,不要每手都講
+  if (pet && pet.on) pet.think();               // 🐾 托腮;人聲「讓我想想 / 讓老夫想想」也是每三手一次(opponent.js)
   updateStatus(`${playerLabel(currentPlayer)}（${config.label}）思考中...`);
   clearTimeout(aiTimer);
   const gen = ++aiGen;
@@ -1053,7 +1059,7 @@ function sayAiLine(situation) {
   const line = pickAiLine({ level, situation, rand: Math.random(), avoid: lastAiLine });
   if (!line) return false;
   lastAiLine = line.text;
-  bubble("🤖 " + line.name + ":" + line.text, 2400);
+  bubble((pet && pet.on ? pet.emoji + " " + pet.name : "🤖 " + line.name) + ":" + line.text, 2400);
   return true;
 }
 
@@ -1116,6 +1122,7 @@ function resetGame(opts = {}) {
   window.__matchT0 = Date.now();   // 📊 給 finalizeGame 的 -done 算「本局秒數」用
   clearPause();                    // ⏸ 新局一定從「沒暫停」開始(暫停中按重新開始也要能開得起來)
   aiTurnNo = 0; lastAiLine = ""; lastShape = null;
+  if (pet) { pet.cancel(); pet.endedFor = null; }   // 🐾 收掉托腮、新的一局可以再反應一次
   clearTimeout(aiTimer);
   setAiThinking(false);
   boardState = createEmptyBoard(BOARD_SIZE);
@@ -1805,9 +1812,11 @@ function puzzleFinish(result, msg, { keepPlaying = false } = {}) {
     if (masters.length && masters.every(q => puzzleBest[q.id])) unlockAchievement("puzzle_master");
     if (mode === "daily") recordDailySolve(p, stars);
     gameOver = true;
+    petGameOver("solved");   // 🐾
   } else {
     hintEl.className = "hint bad";
     hintEl.textContent = `❌ ${msg || "失敗"}`;
+    petGameOver("failed");   // 🐾
     starsEl.textContent = "";
     if (!keepPlaying) gameOver = true;     // 鎖盤,留著看局面;重試才清
   }
@@ -2544,7 +2553,70 @@ function playerLabel(color) {
   }
   return color === "black" ? "黑棋" : "白棋";
 }
-function updateStatus(t) { statusEl.textContent = t; }
+/* ---------- 🐾 動物對手(2026-10-07,skill animal-opponent-kit 第八節:CSS 棋盤 = 透明 WebGL 小窗) ----------
+   簡單 🐰 / 普通 🐱 / 困難 🐻 / 大師 🦉;殘局・每日 🦉;本機雙人・線上不坐。想棋托腮、你下出活三/四會「哇」、
+   贏了跳、輸了低頭、你發呆 15 秒才說「該你了」(一回合最多兩句)。人聲 = gomoku3d 同一套預烤 mp3(voice/),絕無 Web Speech。
+   dynamic import():three CDN 沒到(離線第一次開)⇒ pet 留 null,棋照下、零錯誤。純觀感,不碰規則與 AI。 */
+function petKind() {
+  if (isPuzzleMode()) return "owl";
+  if (mode !== "pve") return null;
+  return ({ easy: "rabbit", normal: "cat", hard: "bear", master: "owl" })[aiLevelInput.value] || "cat";
+}
+function youColor() {
+  if (mode === "pve") return humanColor;
+  if (isPuzzleMode()) { const p = PUZZLES[currentPuzzle]; return p ? p.turn : null; }
+  return null;
+}
+async function initPet() {
+  const canvas = $("petCanvas");
+  if (!canvas || pet) return;
+  try {
+    const [{ Opponent }, { createVoice }] = await Promise.all([import("./js/opponent.js"), import("./js/voice.js")]);
+    const voice = createVoice({ muted: () => !soundToggle.checked });
+    pet = new Opponent({ canvas, wrap: $("scene"), board: $("board3d"), voice });
+    window.__pet = { get pet() { return pet; }, syncPet };   // 🧪 scripts/smoke-pet.mjs 的掛勾
+    const opts = document.querySelectorAll("#petRow .pet-opt");
+    const paint = () => opts.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pet === pet.mode)));
+    opts.forEach((b) => b.addEventListener("click", () => { pet.setMode(b.dataset.pet); paint(); syncPet(); }));
+    paint();
+    $("board3d").addEventListener("pointerdown", () => pet.noteInput());
+    document.addEventListener("keydown", () => pet.noteInput());
+    modeSelect.addEventListener("change", () => setTimeout(syncPet, 0));
+    aiLevelInput.addEventListener("change", () => syncPet());
+    if (gameOver) pet.endedFor = moveHistory;   // 開場接續的存檔已經下完:別一坐下就慶祝
+    syncPet();
+  } catch (e) {
+    console.warn("[pet] 動物對手沒載起來(棋照下):", e && e.message);
+    pet = null;
+  }
+}
+/** 每次狀態列變(換手 / 開局 / 結束)叫一次:誰坐、等不等你 */
+function syncPet() {
+  if (!pet) return;
+  pet.seat(petKind());
+  document.body.classList.toggle("pet-on", pet.on);
+  pet.waiting = !gameOver && !aiThinking && !tossing && !paused && replayIndex === null && currentPlayer === youColor();
+}
+/** commitMove 落子後:電腦下 ⇒ 放子手勢;你下出活三 / 四 ⇒「哇!好棋」 */
+function petAfterMove(color) {
+  if (!pet || !pet.kind || replaying) return;
+  const you = youColor();
+  if (!you) return;
+  if (color !== you) { pet.react("place"); return; }
+  if (!gameOver && lastShape && lastShape.color === color && (lastShape.fours > 0 || lastShape.liveThrees > 0)) pet.react("gasp", "wow");
+}
+/** 一局結束(finalizeGame / puzzleFinish)只反應一次 */
+function petGameOver(result) {
+  if (!pet || !pet.kind || replaying || pet.endedFor === moveHistory) return;
+  pet.endedFor = moveHistory;
+  if (result === "draw") pet.react("shrug", "draw", 300);
+  else if (result === "petWin") pet.react("win", "win", 200);
+  else if (result === "solved") pet.react("gasp", "wow", 200);    // 🦉 解出來了 ⇒「好棋!有兩下子」
+  else if (result === "failed") pet.react("shrug", "again", 300); // 沒解開 ⇒「別急,再想一想」
+  else pet.react("lose", "lose", 300);
+}
+
+function updateStatus(t) { statusEl.textContent = t; syncPet(); }
 
 /* ---------- 🏷 版本號徽章(艦隊鐵則⑦,0906;index.html 只放容器,邏輯在這) ----------
    問「正在控制本頁的 SW」拿版本 = 你手上真的在跑的那一版;頁面不寫死任何版號(不會漂;tests/vertag.test.mjs 釘死)。
@@ -2648,3 +2720,5 @@ function updateStatus(t) { statusEl.textContent = t; }
     });
   } catch (e) { /* 工具列壞掉不可以連遊戲一起拖下水 */ }
 })();
+
+initPet();   // 🐾 最後才載(dynamic import;three CDN 沒到就沒動物,棋照下)
